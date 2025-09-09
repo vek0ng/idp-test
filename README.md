@@ -1,6 +1,6 @@
 # IDP Stack
 
-This repository contains the infrastructure code for deploying an Identity Provider (IDP) stack to any one of three public cloud providers (GCP, AWS, Azure) or locally using Kind Kubernetes cluster. Kind is the default. The stack is experimental. Hence, it was built to be deployed as functional scripts using Taskfile to orchestrate the implementation.
+This repository contains the infrastructure code for deploying an Internal Developer Platform (IDP) to any one of three public cloud providers (GCP, AWS, Azure) or locally using Kind Kubernetes cluster. Kind is the default. The stack is experimental. Hence, it was written for experimenting, and built as functional scripts using Taskfile to orchestrate the implementation workflows.
 
 ## Layout
 
