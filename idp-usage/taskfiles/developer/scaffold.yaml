@@ -1,0 +1,398 @@
+version: '3'
+
+# ===============================
+# Application Scaffolding and Templates
+# ===============================
+
+vars:
+  # Standardized parameters
+  APP_NAME: '{{.APP_NAME}}'
+  TEMPLATE: '{{.TEMPLATE | default "go-service"}}'
+  OUTPUT_DIR: '{{.OUTPUT_DIR | default "apps"}}'
+  
+  # Template configuration
+  AUTHOR: '{{.AUTHOR | default "IDP Developer"}}'
+  DESCRIPTION: '{{.DESCRIPTION | default "Generated application"}}'
+  VERSION: '{{.VERSION | default "1.0.0"}}'
+
+tasks:
+
+  # ===============================
+  # Application Scaffolding
+  # ===============================
+
+  create:
+    desc: Create new application from template
+    vars:
+      APP_NAME: '{{.APP_NAME}}'
+      TEMPLATE: '{{.TEMPLATE}}'
+      OUTPUT_DIR: '{{.OUTPUT_DIR}}'
+    preconditions:
+      - sh: test -n "{{.APP_NAME}}"
+        msg: "APP_NAME parameter is required"
+      - sh: '! test -d "{{.OUTPUT_DIR}}/{{.APP_NAME}}"'
+        msg: "Application {{.APP_NAME}} already exists"
+    cmds:
+      - echo "🏗️ Creating new application {{.APP_NAME}} from {{.TEMPLATE}} template"
+      - task: _validate-template
+        vars:
+          TEMPLATE: '{{.TEMPLATE}}'
+      - task: _create-app-structure
+        vars:
+          APP_NAME: '{{.APP_NAME}}'
+          TEMPLATE: '{{.TEMPLATE}}'
+          OUTPUT_DIR: '{{.OUTPUT_DIR}}'
+      - task: _generate-app-files
+        vars:
+          APP_NAME: '{{.APP_NAME}}'
+          TEMPLATE: '{{.TEMPLATE}}'
+          OUTPUT_DIR: '{{.OUTPUT_DIR}}'
+      - echo "✅ Application {{.APP_NAME}} created successfully"
+      - echo "📁 Location {{.OUTPUT_DIR}}/{{.APP_NAME}}"
+
+  # ===============================
+  # Template Management
+  # ===============================
+
+  list-templates:
+    desc: List available application templates
+    cmds:
+      - echo "📋 Available Application Templates"
+      - echo "================================="
+      - echo ""
+      - echo "🔹 go-service        - Go web service with Gin framework"
+      - echo "🔹 go-cli           - Go command-line application"
+      - echo "🔹 node-express     - Node.js Express web service"
+      - echo "🔹 node-fastify     - Node.js Fastify web service"
+      - echo "🔹 python-flask     - Python Flask web service"
+      - echo "🔹 python-fastapi   - Python FastAPI web service"
+      - echo "🔹 static-site      - Static HTML/CSS/JS site"
+      - echo ""
+      - echo "Usage - task scaffold:create APP_NAME=my-app TEMPLATE=go-service"
+
+  create-template:
+    desc: Create new application template
+    vars:
+      TEMPLATE_NAME: '{{.TEMPLATE_NAME}}'
+    cmds:
+      - echo "🏗️ Creating new template {{.TEMPLATE_NAME}}"
+      - task: _create-template-structure
+        vars:
+          TEMPLATE_NAME: '{{.TEMPLATE_NAME}}'
+
+  # ===============================
+  # Specific Template Creators
+  # ===============================
+
+  create-go-service:
+    desc: Create Go web service application
+    vars:
+      APP_NAME: '{{.APP_NAME}}'
+    cmds:
+      - task: create
+        vars:
+          APP_NAME: '{{.APP_NAME}}'
+          TEMPLATE: "go-service"
+
+  create-go-cli:
+    desc: Create Go CLI application
+    vars:
+      APP_NAME: '{{.APP_NAME}}'
+    cmds:
+      - task: create
+        vars:
+          APP_NAME: '{{.APP_NAME}}'
+          TEMPLATE: "go-cli"
+
+  create-node-express:
+    desc: Create Node.js Express application
+    vars:
+      APP_NAME: '{{.APP_NAME}}'
+    cmds:
+      - task: create
+        vars:
+          APP_NAME: '{{.APP_NAME}}'
+          TEMPLATE: "node-express"
+
+  create-python-flask:
+    desc: Create Python Flask application
+    vars:
+      APP_NAME: '{{.APP_NAME}}'
+    cmds:
+      - task: create
+        vars:
+          APP_NAME: '{{.APP_NAME}}'
+          TEMPLATE: "python-flask"
+
+  # ===============================
+  # Code Generation Utilities
+  # ===============================
+
+  add-endpoint:
+    desc: Add new HTTP endpoint to existing application
+    vars:
+      APP_NAME: '{{.APP_NAME}}'
+      ENDPOINT_NAME: '{{.ENDPOINT_NAME}}'
+      METHOD: '{{.METHOD | default "GET"}}'
+    cmds:
+      - echo "🔗 Adding {{.METHOD}} endpoint /{{.ENDPOINT_NAME}} to {{.APP_NAME}}"
+      - task: _add-endpoint-to-app
+        vars:
+          APP_NAME: '{{.APP_NAME}}'
+          ENDPOINT_NAME: '{{.ENDPOINT_NAME}}'
+          METHOD: '{{.METHOD}}'
+
+  add-middleware:
+    desc: Add middleware to existing application
+    vars:
+      APP_NAME: '{{.APP_NAME}}'
+      MIDDLEWARE_NAME: '{{.MIDDLEWARE_NAME}}'
+    cmds:
+      - echo "⚙️ Adding middleware {{.MIDDLEWARE_NAME}} to {{.APP_NAME}}"
+      - task: _add-middleware-to-app
+        vars:
+          APP_NAME: '{{.APP_NAME}}'
+          MIDDLEWARE_NAME: '{{.MIDDLEWARE_NAME}}'
+
+  # ===============================
+  # Internal Helper Tasks
+  # ===============================
+
+  _validate-template:
+    internal: true
+    vars:
+      TEMPLATE: '{{.TEMPLATE}}'
+    cmds:
+      - |
+        VALID_TEMPLATES="go-service go-cli node-express node-fastify python-flask python-fastapi static-site"
+        if ! echo "$VALID_TEMPLATES" | grep -q "{{.TEMPLATE}}"; then
+          echo "❌ Invalid template: {{.TEMPLATE}}"
+          echo "Valid templates: $VALID_TEMPLATES"
+          exit 1
+        fi
+        echo "✅ Template {{.TEMPLATE}} validated"
+
+  _create-app-structure:
+    internal: true
+    vars:
+      APP_NAME: '{{.APP_NAME}}'
+      TEMPLATE: '{{.TEMPLATE}}'
+      OUTPUT_DIR: '{{.OUTPUT_DIR}}'
+    cmds:
+      - |
+        # Create application directory structure
+        mkdir -p {{.OUTPUT_DIR}}/{{.APP_NAME}}
+        mkdir -p {{.OUTPUT_DIR}}/{{.APP_NAME}}/k8s
+        mkdir -p {{.OUTPUT_DIR}}/{{.APP_NAME}}/docs
+        mkdir -p {{.OUTPUT_DIR}}/{{.APP_NAME}}/tests
+        
+        echo "✅ Directory structure created"
+
+  _generate-app-files:
+    internal: true
+    vars:
+      APP_NAME: '{{.APP_NAME}}'
+      TEMPLATE: '{{.TEMPLATE}}'
+      OUTPUT_DIR: '{{.OUTPUT_DIR}}'
+    cmds:
+      - |
+        case "{{.TEMPLATE}}" in
+          "go-service")
+            task: _generate-go-service
+            ;;
+          "go-cli")
+            task: _generate-go-cli
+            ;;
+          "node-express")
+            task: _generate-node-express
+            ;;
+          "python-flask")
+            task: _generate-python-flask
+            ;;
+          *)
+            echo "⚠️ Template generation not implemented for {{.TEMPLATE}}"
+            ;;
+        esac
+      - task: _generate-common-files
+        vars:
+          APP_NAME: '{{.APP_NAME}}'
+          OUTPUT_DIR: '{{.OUTPUT_DIR}}'
+
+  _generate-go-service:
+    internal: true
+    vars:
+      APP_NAME: '{{.APP_NAME}}'
+      OUTPUT_DIR: '{{.OUTPUT_DIR}}'
+    cmds:
+      - |
+        # Generate go.mod
+        cat > {{.OUTPUT_DIR}}/{{.APP_NAME}}/go.mod << EOF
+        module {{.APP_NAME}}
+
+        go 1.21
+
+        require (
+            github.com/gin-contrib/cors v1.7.2
+            github.com/gin-gonic/gin v1.10.0
+        )
+        EOF
+        
+        # Generate main.go
+        cat > {{.OUTPUT_DIR}}/{{.APP_NAME}}/main.go << 'EOF'
+        package main
+
+        import (
+            "log"
+            "net/http"
+            "os"
+            "time"
+
+            "github.com/gin-contrib/cors"
+            "github.com/gin-gonic/gin"
+        )
+
+        func main() {
+            router := gin.New()
+            router.Use(cors.New(cors.Config{
+                AllowOrigins:     []string{"*"},
+                AllowMethods:     []string{"GET", "POST", "PUT", "DELETE"},
+                AllowHeaders:     []string{"Origin", "Content-Type"},
+                AllowCredentials: true,
+                MaxAge:           12 * time.Hour,
+            }))
+            
+            router.GET("/", func(c *gin.Context) {
+                c.JSON(http.StatusOK, gin.H{
+                    "message": "Hello from {{.APP_NAME}}!",
+                    "version": os.Getenv("VERSION"),
+                })
+            })
+            
+            router.GET("/health", func(c *gin.Context) {
+                c.JSON(http.StatusOK, gin.H{
+                    "status": "healthy",
+                })
+            })
+            
+            port := os.Getenv("PORT")
+            if port == "" {
+                port = "8080"
+            }
+            
+            log.Printf("Starting server on port %s", port)
+            router.Run(":" + port)
+        }
+        EOF
+
+  _generate-common-files:
+    internal: true
+    vars:
+      APP_NAME: '{{.APP_NAME}}'
+      OUTPUT_DIR: '{{.OUTPUT_DIR}}'
+    cmds:
+      - |
+        # Generate Dockerfile
+        cat > {{.OUTPUT_DIR}}/{{.APP_NAME}}/Dockerfile << 'EOF'
+        FROM golang:1.21-alpine AS build
+        WORKDIR /src
+        COPY go.mod go.sum ./
+        RUN go mod download
+        COPY . .
+        RUN CGO_ENABLED=0 GOOS=linux go build -o app .
+
+        FROM scratch
+        COPY --from=build /src/app /app
+        EXPOSE 8080
+        CMD ["/app"]
+        EOF
+        
+        # Generate Kubernetes deployment
+        cat > {{.OUTPUT_DIR}}/{{.APP_NAME}}/k8s/deployment.yaml << EOF
+        apiVersion: apps/v1
+        kind: Deployment
+        metadata:
+          name: {{.APP_NAME}}
+          labels:
+            app: {{.APP_NAME}}
+        spec:
+          replicas: 1
+          selector:
+            matchLabels:
+              app: {{.APP_NAME}}
+          template:
+            metadata:
+              labels:
+                app: {{.APP_NAME}}
+            spec:
+              containers:
+              - name: {{.APP_NAME}}
+                image: {{.APP_NAME}}:latest
+                ports:
+                - containerPort: 8080
+                env:
+                - name: VERSION
+                  value: "{{.VERSION}}"
+        ---
+        apiVersion: v1
+        kind: Service
+        metadata:
+          name: {{.APP_NAME}}-service
+        spec:
+          selector:
+            app: {{.APP_NAME}}
+          ports:
+          - port: 80
+            targetPort: 8080
+        EOF
+        
+        # Generate README
+        cat > {{.OUTPUT_DIR}}/{{.APP_NAME}}/README.md << EOF
+        # {{.APP_NAME}}
+
+        {{.DESCRIPTION}}
+
+        ## Development
+
+        \`\`\`bash
+        # Build
+        task application:build APP_NAME={{.APP_NAME}}
+
+        # Test
+        task application:test APP_NAME={{.APP_NAME}}
+
+        # Deploy
+        task application:deploy APP_NAME={{.APP_NAME}} ENVIRONMENT=dev
+        \`\`\`
+
+        ## API Endpoints
+
+        - GET / - Main endpoint
+        - GET /health - Health check
+
+        Generated by IDP Stack on $(date)
+        EOF
+
+  _add-endpoint-to-app:
+    internal: true
+    vars:
+      APP_NAME: '{{.APP_NAME}}'
+      ENDPOINT_NAME: '{{.ENDPOINT_NAME}}'
+      METHOD: '{{.METHOD}}'
+    cmds:
+      - |
+        if [ -f "apps/{{.APP_NAME}}/main.go" ]; then
+          echo "Adding {{.METHOD}} /{{.ENDPOINT_NAME}} endpoint to Go application"
+          # This would add the endpoint code to the main.go file
+          echo "⚠️ Endpoint generation not fully implemented yet"
+        else
+          echo "❌ Application {{.APP_NAME}} not found or not supported"
+        fi
+
+  _create-template-structure:
+    internal: true
+    vars:
+      TEMPLATE_NAME: '{{.TEMPLATE_NAME}}'
+    cmds:
+      - |
+        mkdir -p templates/{{.TEMPLATE_NAME}}
+        echo "Template {{.TEMPLATE_NAME}} structure created in templates/"

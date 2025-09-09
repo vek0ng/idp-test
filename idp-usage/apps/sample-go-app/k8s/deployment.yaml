@@ -1,0 +1,83 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sample-go-app
+  namespace: default
+  labels:
+    app: sample-go-app
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: sample-go-app
+  template:
+    metadata:
+      labels:
+        app: sample-go-app
+    spec:
+      containers:
+      - name: sample-go-app
+        image: sample-go-app:latest
+        ports:
+        - containerPort: 8080
+        env:
+        - name: VERSION
+          value: "1.0.0"
+        - name: MESSAGE
+          value: "Sample Go Application - IDP Usage Demo"
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "50m"
+          limits:
+            memory: "128Mi"
+            cpu: "100m"
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 8080
+          initialDelaySeconds: 10
+          periodSeconds: 30
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 8080
+          initialDelaySeconds: 5
+          periodSeconds: 10
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: sample-go-app-service
+  namespace: default
+  labels:
+    app: sample-go-app
+spec:
+  selector:
+    app: sample-go-app
+  ports:
+  - protocol: TCP
+    port: 80
+    targetPort: 8080
+  type: ClusterIP
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: sample-go-app-ingress
+  namespace: default
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+spec:
+  ingressClassName: nginx
+  rules:
+  - host: sample-go-app.local
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: sample-go-app-service
+            port:
+              number: 80

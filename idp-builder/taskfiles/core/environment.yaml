@@ -1,0 +1,202 @@
+version: '3'
+
+# ===============================
+# Environment Configuration Management
+# ===============================
+
+vars:
+  ENV_FILE: '{{.ENV_FILE | default ".env"}}'
+  # Standardized parameter names
+  CLUSTER_NAME: '{{.CLUSTER_NAME | default "idp-cluster"}}'
+  PROVIDER: '{{.PROVIDER | default "kind"}}'
+  ENVIRONMENT: '{{.ENVIRONMENT | default "dev"}}'
+  REGION: '{{.REGION | default "ap-southeast-1"}}'
+
+tasks:
+
+  # ===============================
+  # Environment Variable Management
+  # ===============================
+
+  validate:
+    desc: Validate all required environment variables
+    cmds:
+      - echo "🔍 Validating environment configuration..."
+      - task: _validate-cluster-name
+      - task: _validate-provider
+      - task: _validate-environment
+      - task: _validate-region
+      - echo "✅ Environment validation passed"
+
+  show-config:
+    desc: Show current configuration values
+    cmds:
+      - |
+        cat << 'EOF'
+        📋 Current Environment Configuration:
+        ====================================
+        CLUSTER_NAME: {{.CLUSTER_NAME}}
+        PROVIDER: {{.PROVIDER}}
+        ENVIRONMENT: {{.ENVIRONMENT}}
+        REGION: {{.REGION}}
+        EOF
+
+  set-variable:
+    desc: Set environment variable safely (KEY and VALUE required)
+    vars:
+      KEY: '{{.KEY}}'
+      VALUE: '{{.VALUE}}'
+    preconditions:
+      - sh: '[ -n "{{.KEY}}" ]'
+        msg: "KEY parameter is required"
+      - sh: '[ -n "{{.VALUE}}" ]'
+        msg: "VALUE parameter is required"
+    cmds:
+      - task: _validate-variable-name
+        vars:
+          KEY: '{{.KEY}}'
+      - task: _update-environment-file
+        vars:
+          KEY: '{{.KEY}}'
+          VALUE: '{{.VALUE}}'
+      - echo "✅ Set {{.KEY}}={{.VALUE}} in {{.ENV_FILE}}"
+
+  get-variable:
+    desc: Retrieve environment variable value (KEY required)
+    vars:
+      KEY: '{{.KEY}}'
+    preconditions:
+      - sh: '[ -n "{{.KEY}}" ]'
+        msg: "KEY parameter is required"
+    cmds:
+      - |
+        if [ -f {{.ENV_FILE}} ] && grep -q "^{{.KEY}}=" {{.ENV_FILE}}; then
+          value=$(grep "^{{.KEY}}=" {{.ENV_FILE}} | cut -d= -f2)
+          echo "{{.KEY}}=$value"
+        else
+          echo "❌ Variable {{.KEY}} not found in {{.ENV_FILE}}"
+          exit 1
+        fi
+
+  load-config:
+    desc: Load configuration from environment file
+    cmds:
+      - |
+        if [ -f {{.ENV_FILE}} ]; then
+          echo "📂 Loading configuration from {{.ENV_FILE}}"
+          set -a
+          source {{.ENV_FILE}}
+          set +a
+          echo "✅ Configuration loaded"
+        else
+          echo "⚠️ No {{.ENV_FILE}} file found, using defaults"
+        fi
+
+  save-defaults:
+    desc: Save current default values to environment file
+    cmds:
+      - echo "💾 Saving default configuration to {{.ENV_FILE}}"
+      - task: set-variable
+        vars:
+          KEY: "CLUSTER_NAME"
+          VALUE: "{{.CLUSTER_NAME}}"
+      - task: set-variable
+        vars:
+          KEY: "PROVIDER"
+          VALUE: "{{.PROVIDER}}"
+      - task: set-variable
+        vars:
+          KEY: "ENVIRONMENT"
+          VALUE: "{{.ENVIRONMENT}}"
+      - task: set-variable
+        vars:
+          KEY: "REGION"
+          VALUE: "{{.REGION}}"
+      - echo "✅ Default configuration saved"
+
+  # ===============================
+  # Internal Helper Tasks
+  # ===============================
+
+  _validate-cluster-name:
+    internal: true
+    cmds:
+      - |
+        CLUSTER_NAME="{{.CLUSTER_NAME}}"
+        if [[ ! "$CLUSTER_NAME" =~ ^[a-z0-9]([a-z0-9-]*[a-z0-9])?$ ]]; then
+          echo "❌ CLUSTER_NAME must be lowercase alphanumeric with hyphens {{.CLUSTER_NAME}}"
+          exit 1
+        fi
+        if [ ${#CLUSTER_NAME} -gt 63 ]; then
+          echo "❌ CLUSTER_NAME must be 63 characters or less {{.CLUSTER_NAME}}"
+          exit 1
+        fi
+        echo "✅ CLUSTER_NAME is valid {{.CLUSTER_NAME}}"
+
+  _validate-provider:
+    internal: true
+    cmds:
+      - |
+        case "{{.PROVIDER}}" in
+          kind|aws|gcp|azure)
+            echo "✅ PROVIDER is valid {{.PROVIDER}}"
+            ;;
+          *)
+            echo "❌ PROVIDER must be one of kind, aws, gcp, azure (got {{.PROVIDER}})"
+            exit 1
+            ;;
+        esac
+
+  _validate-environment:
+    internal: true
+    cmds:
+      - |
+        case "{{.ENVIRONMENT}}" in
+          dev|staging|production)
+            echo "✅ ENVIRONMENT is valid {{.ENVIRONMENT}}"
+            ;;
+          *)
+            echo "❌ ENVIRONMENT must be one of dev, staging, production (got {{.ENVIRONMENT}})"
+            exit 1
+            ;;
+        esac
+
+  _validate-region:
+    internal: true
+    cmds:
+      - |
+        if [ -n "{{.REGION}}" ]; then
+          echo "✅ REGION is set {{.REGION}}"
+        else
+          echo "⚠️ REGION is not set, using default"
+        fi
+
+  _validate-variable-name:
+    internal: true
+    vars:
+      KEY: '{{.KEY}}'
+    cmds:
+      - |
+        if [[ ! "{{.KEY}}" =~ ^[A-Z_][A-Z0-9_]*$ ]]; then
+          echo "❌ Variable name must be uppercase with underscores {{.KEY}}"
+          exit 1
+        fi
+
+  _update-environment-file:
+    internal: true
+    vars:
+      KEY: '{{.KEY}}'
+      VALUE: '{{.VALUE}}'
+    cmds:
+      - |
+        # Create env file if it doesn't exist
+        touch {{.ENV_FILE}}
+        
+        # Remove existing line if present
+        if grep -q "^{{.KEY}}=" {{.ENV_FILE}}; then
+          # Use different delimiters to avoid conflicts with the variable content
+          sed -i '/^{{.KEY}}=/d' {{.ENV_FILE}}
+        fi
+        
+        # Add new line
+        echo "{{.KEY}}={{.VALUE}}" >> {{.ENV_FILE}}

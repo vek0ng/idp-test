@@ -1,0 +1,234 @@
+version: '3'
+
+# ===============================
+# Storage Management
+# ===============================
+
+vars:
+  # Standardized parameters
+  CLUSTER_NAME: '{{.CLUSTER_NAME | default "idp-cluster"}}'
+  PROVIDER: '{{.PROVIDER | default "kind"}}'
+  ENVIRONMENT: '{{.ENVIRONMENT | default "dev"}}'
+
+tasks:
+
+  # ===============================
+  # Storage Class Management
+  # ===============================
+
+  setup-storage:
+    desc: Setup storage classes and persistent volumes for the specified provider
+    vars:
+      PROVIDER: '{{.PROVIDER}}'
+      ENVIRONMENT: '{{.ENVIRONMENT}}'
+    cmds:
+      - echo "💾 Setting up storage for {{.PROVIDER}} provider in {{.ENVIRONMENT}} environment"
+      - task: _setup-{{.PROVIDER}}-storage
+        vars:
+          ENVIRONMENT: '{{.ENVIRONMENT}}'
+      - task: check-storage-classes
+      - echo "✅ Storage setup complete for {{.PROVIDER}}"
+
+  check-storage-classes:
+    desc: List available storage classes
+    cmds:
+      - |
+        echo "📊 Available Storage Classes:"
+        if kubectl get storageclass >/dev/null 2>&1; then
+          kubectl get storageclass -o wide
+        else
+          echo "❌ No storage classes found or kubectl not connected"
+        fi
+
+  check-persistent-volumes:
+    desc: List persistent volumes and claims
+    cmds:
+      - |
+        echo "📊 Persistent Volumes:"
+        if kubectl get pv >/dev/null 2>&1; then
+          kubectl get pv -o wide
+          echo ""
+          echo "📊 Persistent Volume Claims (all namespaces):"
+          kubectl get pvc --all-namespaces -o wide
+        else
+          echo "❌ Cannot access persistent volumes"
+        fi
+
+  create-test-pvc:
+    desc: Create a test persistent volume claim
+    vars:
+      PVC_NAME: '{{.PVC_NAME | default "test-pvc"}}'
+      NAMESPACE: '{{.NAMESPACE | default "default"}}'
+      SIZE: '{{.SIZE | default "1Gi"}}'
+    cmds:
+      - echo "🧪 Creating test PVC {{.PVC_NAME}} ({{.SIZE}}) in namespace {{.NAMESPACE}}"
+      - |
+        cat << EOF | kubectl apply -f -
+        apiVersion: v1
+        kind: PersistentVolumeClaim
+        metadata:
+          name: {{.PVC_NAME}}
+          namespace: {{.NAMESPACE}}
+        spec:
+          accessModes:
+            - ReadWriteOnce
+          resources:
+            requests:
+              storage: {{.SIZE}}
+        EOF
+      - echo "✅ Test PVC {{.PVC_NAME}} created"
+      - kubectl get pvc {{.PVC_NAME}} -n {{.NAMESPACE}}
+
+  delete-test-pvc:
+    desc: Delete test persistent volume claim
+    vars:
+      PVC_NAME: '{{.PVC_NAME | default "test-pvc"}}'
+      NAMESPACE: '{{.NAMESPACE | default "default"}}'
+    cmds:
+      - echo "🗑️ Deleting test PVC {{.PVC_NAME}} from namespace {{.NAMESPACE}}"
+      - kubectl delete pvc {{.PVC_NAME}} -n {{.NAMESPACE}} --ignore-not-found=true
+      - echo "✅ Test PVC {{.PVC_NAME}} deleted"
+
+  # ===============================
+  # Backup and Restore (Placeholder)
+  # ===============================
+
+  setup-backup:
+    desc: Setup backup solution (placeholder for future implementation)
+    vars:
+      PROVIDER: '{{.PROVIDER}}'
+    cmds:
+      - |
+        echo "💼 Backup setup for {{.PROVIDER}} provider"
+        echo "ℹ️ Backup solutions will be implemented in Phase 6"
+        case "{{.PROVIDER}}" in
+          aws)
+            echo "Consider using AWS EBS snapshots or Velero"
+            ;;
+          gcp)
+            echo "Consider using GCP persistent disk snapshots or Velero"
+            ;;
+          azure)
+            echo "Consider using Azure disk snapshots or Velero"
+            ;;
+          kind)
+            echo "Consider using local volume backups"
+            ;;
+        esac
+
+  # ===============================
+  # Internal Helper Tasks
+  # ===============================
+
+  _setup-kind-storage:
+    internal: true
+    vars:
+      ENVIRONMENT: '{{.ENVIRONMENT}}'
+    cmds:
+      - |
+        echo "💾 Setting up Kind storage"
+        echo "ℹ️ Kind uses local storage by default"
+        
+        # Create a basic storage class if it doesn't exist
+        if ! kubectl get storageclass kind-local >/dev/null 2>&1; then
+          cat << EOF | kubectl apply -f -
+          apiVersion: storage.k8s.io/v1
+          kind: StorageClass
+          metadata:
+            name: kind-local
+            annotations:
+              storageclass.kubernetes.io/is-default-class: "false"
+          provisioner: rancher.io/local-path
+          parameters:
+            volumeType: local
+          volumeBindingMode: WaitForFirstConsumer
+          reclaimPolicy: Delete
+        EOF
+        fi
+        
+        echo "✅ Kind storage configuration complete"
+
+  _setup-aws-storage:
+    internal: true
+    vars:
+      ENVIRONMENT: '{{.ENVIRONMENT}}'
+    cmds:
+      - |
+        echo "💾 Setting up AWS EBS storage"
+        
+        # Install AWS EBS CSI driver
+        if ! kubectl get storageclass gp3 >/dev/null 2>&1; then
+          echo "Installing AWS EBS CSI driver..."
+          kubectl apply -k "github.com/kubernetes-sigs/aws-ebs-csi-driver/deploy/kubernetes/overlays/stable/?ref=release-1.25"
+          
+          # Create GP3 storage class
+          cat << EOF | kubectl apply -f -
+          apiVersion: storage.k8s.io/v1
+          kind: StorageClass
+          metadata:
+            name: gp3
+            annotations:
+              storageclass.kubernetes.io/is-default-class: "true"
+          provisioner: ebs.csi.aws.com
+          parameters:
+            type: gp3
+            fsType: ext4
+          volumeBindingMode: WaitForFirstConsumer
+          allowVolumeExpansion: true
+        EOF
+        fi
+        
+        echo "✅ AWS storage configuration complete"
+
+  _setup-gcp-storage:
+    internal: true
+    vars:
+      ENVIRONMENT: '{{.ENVIRONMENT}}'
+    cmds:
+      - |
+        echo "💾 Setting up GCP persistent disk storage"
+        
+        # Create SSD storage class if it doesn't exist
+        if ! kubectl get storageclass fast-ssd >/dev/null 2>&1; then
+          cat << EOF | kubectl apply -f -
+          apiVersion: storage.k8s.io/v1
+          kind: StorageClass
+          metadata:
+            name: fast-ssd
+          provisioner: kubernetes.io/gce-pd
+          parameters:
+            type: pd-ssd
+            replication-type: none
+          volumeBindingMode: WaitForFirstConsumer
+          allowVolumeExpansion: true
+        EOF
+        fi
+        
+        echo "✅ GCP storage configuration complete"
+
+  _setup-azure-storage:
+    internal: true
+    vars:
+      ENVIRONMENT: '{{.ENVIRONMENT}}'
+    cmds:
+      - |
+        echo "💾 Setting up Azure disk storage"
+        
+        # Create premium storage class if it doesn't exist
+        if ! kubectl get storageclass managed-premium-retain >/dev/null 2>&1; then
+          cat << EOF | kubectl apply -f -
+          apiVersion: storage.k8s.io/v1
+          kind: StorageClass
+          metadata:
+            name: managed-premium-retain
+          provisioner: kubernetes.io/azure-disk
+          parameters:
+            storageaccounttype: Premium_LRS
+            kind: Managed
+          reclaimPolicy: Retain
+          volumeBindingMode: WaitForFirstConsumer
+          allowVolumeExpansion: true
+        EOF
+        fi
+        
+        echo "✅ Azure storage configuration complete"

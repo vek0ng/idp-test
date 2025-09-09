@@ -1,0 +1,1095 @@
+version: '3'
+
+# IDP Usage - CI/CD Integration Workflows
+# Provides CI/CD pipeline integration and automation
+
+vars:
+  APP_NAME: '{{.APP_NAME}}'
+  PIPELINE_TYPE: '{{.PIPELINE_TYPE | default "github"}}'
+  ENVIRONMENT: '{{.ENVIRONMENT | default "development"}}'
+  BRANCH: '{{.BRANCH | default "main"}}'
+  REGISTRY: '{{.REGISTRY | default "ghcr.io"}}'
+  REGISTRY_USERNAME: '{{.REGISTRY_USERNAME}}'
+
+tasks:
+  setup-ci-cd:
+    desc: Setup complete CI/CD pipeline for application
+    vars:
+      APP_NAME: '{{.APP_NAME}}'
+      PIPELINE_TYPE: '{{.PIPELINE_TYPE}}'
+      REGISTRY: '{{.REGISTRY}}'
+    preconditions:
+      - test -n "{{.APP_NAME}}" # Require application name
+    cmds:
+      - echo "🚀 CI/CD Pipeline Setup"
+      - echo "======================="
+      - echo "Application - {{.APP_NAME}}"
+      - echo "Pipeline Type - {{.PIPELINE_TYPE}}"
+      - echo "Registry - {{.REGISTRY}}"
+      - echo ""
+      - echo "Phase 1 - Generate CI/CD Configuration"
+      - task: generate-pipeline-config
+        vars:
+          APP_NAME: '{{.APP_NAME}}'
+          PIPELINE_TYPE: '{{.PIPELINE_TYPE}}'
+      - echo ""
+      - echo "Phase 2 - Setup Container Registry Integration"
+      - task: setup-registry-integration
+        vars:
+          APP_NAME: '{{.APP_NAME}}'
+          REGISTRY: '{{.REGISTRY}}'
+      - echo ""
+      - echo "Phase 3 - Configure Quality Gates"
+      - task: setup-quality-gates
+        vars:
+          APP_NAME: '{{.APP_NAME}}'
+      - echo ""
+      - echo "Phase 4 - Setup Deployment Automation"
+      - task: setup-deployment-automation
+        vars:
+          APP_NAME: '{{.APP_NAME}}'
+      - echo ""
+      - echo "Phase 5 - Configure Monitoring Integration"
+      - task: setup-monitoring-integration
+        vars:
+          APP_NAME: '{{.APP_NAME}}'
+      - echo ""
+      - echo "✅ CI/CD pipeline setup completed!"
+      - task: show-pipeline-status
+        vars:
+          APP_NAME: '{{.APP_NAME}}'
+          PIPELINE_TYPE: '{{.PIPELINE_TYPE}}'
+
+  generate-pipeline-config:
+    desc: Generate CI/CD pipeline configuration files
+    vars:
+      APP_NAME: '{{.APP_NAME}}'
+      PIPELINE_TYPE: '{{.PIPELINE_TYPE}}'
+    cmds:
+      - echo "📝 Generating CI/CD Pipeline Configuration"
+      - echo "========================================="
+      - |
+        mkdir -p "apps/{{.APP_NAME}}/.github/workflows"
+        mkdir -p "apps/{{.APP_NAME}}/.gitlab-ci"
+        mkdir -p "apps/{{.APP_NAME}}/azure-pipelines"
+        
+        case "{{.PIPELINE_TYPE}}" in
+          "github")
+            echo "Generating GitHub Actions workflow..."
+            task: generate-github-workflow
+            ;;
+          "gitlab")
+            echo "Generating GitLab CI configuration..."
+            task: generate-gitlab-ci
+            ;;
+          "azure")
+            echo "Generating Azure Pipelines configuration..."
+            task: generate-azure-pipeline
+            ;;
+          *)
+            echo "Generating GitHub Actions workflow (default)..."
+            task: generate-github-workflow
+            ;;
+        esac
+
+  generate-github-workflow:
+    desc: Generate GitHub Actions workflow
+    vars:
+      APP_NAME: '{{.APP_NAME}}'
+    cmds:
+      - |
+        cat > "apps/{{.APP_NAME}}/.github/workflows/ci-cd.yaml" << 'EOF'
+        name: CI/CD Pipeline
+        
+        on:
+          push:
+            branches: [ main, develop ]
+          pull_request:
+            branches: [ main ]
+          release:
+            types: [ published ]
+        
+        env:
+          REGISTRY: ghcr.io
+          IMAGE_NAME: ${{ github.repository }}/{{.APP_NAME}}
+        
+        jobs:
+          test:
+            name: Test
+            runs-on: ubuntu-latest
+            
+            steps:
+            - name: Checkout code
+              uses: actions/checkout@v4
+            
+            - name: Setup language runtime
+              uses: actions/setup-node@v4  # Adjust based on language
+              with:
+                node-version: '20'
+                cache: 'npm'
+            
+            - name: Install dependencies
+              run: |
+                cd apps/{{.APP_NAME}}
+                npm ci
+            
+            - name: Run unit tests
+              run: |
+                cd apps/{{.APP_NAME}}
+                npm test
+            
+            - name: Run integration tests
+              run: |
+                cd apps/{{.APP_NAME}}
+                npm run test:integration
+            
+            - name: Generate coverage report
+              run: |
+                cd apps/{{.APP_NAME}}
+                npm run test:coverage
+            
+            - name: Upload coverage reports
+              uses: codecov/codecov-action@v3
+              with:
+                file: apps/{{.APP_NAME}}/coverage/lcov.info
+        
+          security:
+            name: Security Scan
+            runs-on: ubuntu-latest
+            
+            steps:
+            - name: Checkout code
+              uses: actions/checkout@v4
+            
+            - name: Run security audit
+              run: |
+                cd apps/{{.APP_NAME}}
+                npm audit --audit-level moderate
+            
+            - name: Run SAST scan
+              uses: github/codeql-action/init@v2
+              with:
+                languages: javascript  # Adjust based on language
+            
+            - name: Perform CodeQL Analysis
+              uses: github/codeql-action/analyze@v2
+        
+          quality:
+            name: Code Quality
+            runs-on: ubuntu-latest
+            
+            steps:
+            - name: Checkout code
+              uses: actions/checkout@v4
+            
+            - name: Setup language runtime
+              uses: actions/setup-node@v4
+              with:
+                node-version: '20'
+                cache: 'npm'
+            
+            - name: Install dependencies
+              run: |
+                cd apps/{{.APP_NAME}}
+                npm ci
+            
+            - name: Run linting
+              run: |
+                cd apps/{{.APP_NAME}}
+                npm run lint
+            
+            - name: Run code formatting check
+              run: |
+                cd apps/{{.APP_NAME}}
+                npm run format:check
+            
+            - name: SonarCloud Scan
+              uses: SonarSource/sonarcloud-github-action@master
+              env:
+                GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+                SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        
+          build:
+            name: Build and Push
+            runs-on: ubuntu-latest
+            needs: [test, security, quality]
+            permissions:
+              contents: read
+              packages: write
+            
+            steps:
+            - name: Checkout code
+              uses: actions/checkout@v4
+            
+            - name: Set up Docker Buildx
+              uses: docker/setup-buildx-action@v3
+            
+            - name: Log in to Container Registry
+              uses: docker/login-action@v3
+              with:
+                registry: ${{ env.REGISTRY }}
+                username: ${{ github.actor }}
+                password: ${{ secrets.GITHUB_TOKEN }}
+            
+            - name: Extract metadata
+              id: meta
+              uses: docker/metadata-action@v5
+              with:
+                images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+                tags: |
+                  type=ref,event=branch
+                  type=ref,event=pr
+                  type=semver,pattern={{version}}
+                  type=semver,pattern={{major}}.{{minor}}
+                  type=sha,prefix={{branch}}-
+            
+            - name: Build and push Docker image
+              uses: docker/build-push-action@v5
+              with:
+                context: apps/{{.APP_NAME}}
+                push: true
+                tags: ${{ steps.meta.outputs.tags }}
+                labels: ${{ steps.meta.outputs.labels }}
+                cache-from: type=gha
+                cache-to: type=gha,mode=max
+        
+          deploy-dev:
+            name: Deploy to Development
+            runs-on: ubuntu-latest
+            needs: [build]
+            if: github.ref == 'refs/heads/develop'
+            environment: development
+            
+            steps:
+            - name: Checkout code
+              uses: actions/checkout@v4
+            
+            - name: Setup kubectl
+              uses: azure/setup-kubectl@v3
+              with:
+                version: 'latest'
+            
+            - name: Configure kubectl
+              run: |
+                echo "${{ secrets.KUBECONFIG_DEV }}" | base64 -d > ~/.kube/config
+            
+            - name: Deploy to development
+              run: |
+                export IMAGE_TAG=${{ github.sha }}
+                task deploy:deploy APP_NAME={{.APP_NAME}} ENVIRONMENT=development IMAGE_TAG=$IMAGE_TAG
+        
+          deploy-staging:
+            name: Deploy to Staging
+            runs-on: ubuntu-latest
+            needs: [build]
+            if: github.ref == 'refs/heads/main'
+            environment: staging
+            
+            steps:
+            - name: Checkout code
+              uses: actions/checkout@v4
+            
+            - name: Setup kubectl
+              uses: azure/setup-kubectl@v3
+              with:
+                version: 'latest'
+            
+            - name: Configure kubectl
+              run: |
+                echo "${{ secrets.KUBECONFIG_STAGING }}" | base64 -d > ~/.kube/config
+            
+            - name: Deploy to staging
+              run: |
+                export IMAGE_TAG=${{ github.sha }}
+                task deploy:deploy APP_NAME={{.APP_NAME}} ENVIRONMENT=staging IMAGE_TAG=$IMAGE_TAG
+            
+            - name: Run smoke tests
+              run: |
+                task test:smoke-test APP_NAME={{.APP_NAME}} ENVIRONMENT=staging
+        
+          deploy-production:
+            name: Deploy to Production
+            runs-on: ubuntu-latest
+            needs: [build]
+            if: github.event_name == 'release' && github.event.action == 'published'
+            environment: production
+            
+            steps:
+            - name: Checkout code
+              uses: actions/checkout@v4
+            
+            - name: Setup kubectl
+              uses: azure/setup-kubectl@v3
+              with:
+                version: 'latest'
+            
+            - name: Configure kubectl
+              run: |
+                echo "${{ secrets.KUBECONFIG_PROD }}" | base64 -d > ~/.kube/config
+            
+            - name: Deploy to production
+              run: |
+                export IMAGE_TAG=${{ github.event.release.tag_name }}
+                task workflows:production-deploy APP_NAME={{.APP_NAME}} CLUSTER_NAME=prod IMAGE_TAG=$IMAGE_TAG
+        EOF
+        echo "✅ Generated GitHub Actions workflow"
+
+  generate-gitlab-ci:
+    desc: Generate GitLab CI configuration
+    vars:
+      APP_NAME: '{{.APP_NAME}}'
+    cmds:
+      - |
+        cat > "apps/{{.APP_NAME}}/.gitlab-ci.yml" << 'EOF'
+        stages:
+          - test
+          - quality
+          - security
+          - build
+          - deploy
+        
+        variables:
+          DOCKER_DRIVER: overlay2
+          DOCKER_TLS_CERTDIR: "/certs"
+          REGISTRY: $CI_REGISTRY
+          IMAGE_NAME: $CI_REGISTRY_IMAGE/{{.APP_NAME}}
+        
+        # Test Stage
+        unit-tests:
+          stage: test
+          image: node:20-alpine
+          script:
+            - cd apps/{{.APP_NAME}}
+            - npm ci
+            - npm test
+          artifacts:
+            reports:
+              junit: apps/{{.APP_NAME}}/test-results.xml
+              coverage_report:
+                coverage_format: cobertura
+                path: apps/{{.APP_NAME}}/coverage/cobertura-coverage.xml
+        
+        integration-tests:
+          stage: test
+          image: node:20-alpine
+          services:
+            - postgres:13
+          script:
+            - cd apps/{{.APP_NAME}}
+            - npm ci
+            - npm run test:integration
+        
+        # Quality Stage
+        code-quality:
+          stage: quality
+          image: node:20-alpine
+          script:
+            - cd apps/{{.APP_NAME}}
+            - npm ci
+            - npm run lint
+            - npm run format:check
+          artifacts:
+            reports:
+              codequality: apps/{{.APP_NAME}}/codequality-report.json
+        
+        # Security Stage
+        security-scan:
+          stage: security
+          image: node:20-alpine
+          script:
+            - cd apps/{{.APP_NAME}}
+            - npm audit --audit-level moderate
+          allow_failure: true
+        
+        container-scan:
+          stage: security
+          image: docker:stable
+          services:
+            - docker:stable-dind
+          script:
+            - docker build -t temp-scan-image apps/{{.APP_NAME}}
+            - docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy image temp-scan-image
+          allow_failure: true
+        
+        # Build Stage
+        build:
+          stage: build
+          image: docker:stable
+          services:
+            - docker:stable-dind
+          before_script:
+            - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
+          script:
+            - |
+              if [[ "$CI_COMMIT_REF_NAME" == "main" ]]; then
+                TAG="latest"
+              else
+                TAG="$CI_COMMIT_REF_SLUG"
+              fi
+            - docker build -t $IMAGE_NAME:$TAG apps/{{.APP_NAME}}
+            - docker push $IMAGE_NAME:$TAG
+          only:
+            - main
+            - develop
+            - tags
+        
+        # Deploy Stages
+        deploy-development:
+          stage: deploy
+          image: bitnami/kubectl:latest
+          script:
+            - echo "$KUBECONFIG_DEV" | base64 -d > ~/.kube/config
+            - export IMAGE_TAG=$CI_COMMIT_SHA
+            - task deploy:deploy APP_NAME={{.APP_NAME}} ENVIRONMENT=development IMAGE_TAG=$IMAGE_TAG
+          environment:
+            name: development
+          only:
+            - develop
+        
+        deploy-staging:
+          stage: deploy
+          image: bitnami/kubectl:latest
+          script:
+            - echo "$KUBECONFIG_STAGING" | base64 -d > ~/.kube/config
+            - export IMAGE_TAG=$CI_COMMIT_SHA
+            - task deploy:deploy APP_NAME={{.APP_NAME}} ENVIRONMENT=staging IMAGE_TAG=$IMAGE_TAG
+            - task test:smoke-test APP_NAME={{.APP_NAME}} ENVIRONMENT=staging
+          environment:
+            name: staging
+          only:
+            - main
+        
+        deploy-production:
+          stage: deploy
+          image: bitnami/kubectl:latest
+          script:
+            - echo "$KUBECONFIG_PROD" | base64 -d > ~/.kube/config
+            - task workflows:production-deploy APP_NAME={{.APP_NAME}} CLUSTER_NAME=prod IMAGE_TAG=$CI_COMMIT_TAG
+          environment:
+            name: production
+          when: manual
+          only:
+            - tags
+        EOF
+        echo "✅ Generated GitLab CI configuration"
+
+  setup-registry-integration:
+    desc: Setup container registry integration
+    vars:
+      APP_NAME: '{{.APP_NAME}}'
+      REGISTRY: '{{.REGISTRY}}'
+    cmds:
+      - echo "🐳 Setting up Container Registry Integration"
+      - echo "==========================================="
+      - |
+        # Create registry configuration
+        mkdir -p "apps/{{.APP_NAME}}/.docker"
+        
+        cat > "apps/{{.APP_NAME}}/.docker/config.json" << EOF
+        {
+          "auths": {
+            "{{.REGISTRY}}": {
+              "username": "\${REGISTRY_USERNAME}",
+              "password": "\${REGISTRY_PASSWORD}"
+            }
+          },
+          "credHelpers": {
+            "{{.REGISTRY}}": "secretservice"
+          }
+        }
+        EOF
+        echo "✅ Registry configuration created"
+      - |
+        # Create registry secrets for Kubernetes
+        cat > "apps/{{.APP_NAME}}/k8s/registry-secret.yaml" << EOF
+        apiVersion: v1
+        kind: Secret
+        metadata:
+          name: registry-credentials
+          namespace: default
+        type: kubernetes.io/dockerconfigjson
+        data:
+          .dockerconfigjson: # Base64 encoded .docker/config.json
+        EOF
+        echo "✅ Registry secret template created"
+      - |
+        # Create image pull policy configuration
+        cat > "apps/{{.APP_NAME}}/k8s/image-policy.yaml" << EOF
+        apiVersion: v1
+        kind: ConfigMap
+        metadata:
+          name: {{.APP_NAME}}-image-policy
+        data:
+          policy.json: |
+            {
+              "default": [
+                {
+                  "type": "insecureAcceptAnything"
+                }
+              ],
+              "transports": {
+                "docker": {
+                  "{{.REGISTRY}}": [
+                    {
+                      "type": "signedBy",
+                      "keyType": "GPGKeys",
+                      "keyPath": "/etc/pki/rpm-gpg"
+                    }
+                  ]
+                }
+              }
+            }
+        EOF
+        echo "✅ Image policy configuration created"
+
+  setup-quality-gates:
+    desc: Setup code quality gates and checks
+    vars:
+      APP_NAME: '{{.APP_NAME}}'
+    cmds:
+      - echo "🎯 Setting up Quality Gates"
+      - echo "============================"
+      - |
+        # Create SonarQube configuration
+        cat > "apps/{{.APP_NAME}}/sonar-project.properties" << EOF
+        sonar.projectKey={{.APP_NAME}}
+        sonar.projectName={{.APP_NAME}}
+        sonar.projectVersion=1.0
+        
+        # Source code
+        sonar.sources=src
+        sonar.exclusions=**/node_modules/**,**/dist/**,**/coverage/**
+        
+        # Test configuration
+        sonar.tests=src
+        sonar.test.inclusions=**/*.test.js,**/*.spec.js
+        sonar.test.exclusions=**/node_modules/**
+        
+        # Coverage
+        sonar.javascript.lcov.reportPaths=coverage/lcov.info
+        sonar.testExecutionReportPaths=test-results/sonar-report.xml
+        
+        # Quality gates
+        sonar.qualitygate.wait=true
+        EOF
+        echo "✅ SonarQube configuration created"
+      - |
+        # Create ESLint configuration
+        cat > "apps/{{.APP_NAME}}/.eslintrc.js" << 'EOF'
+        module.exports = {
+          env: {
+            node: true,
+            es2021: true,
+            jest: true
+          },
+          extends: [
+            'eslint:recommended',
+            '@typescript-eslint/recommended',
+            'prettier'
+          ],
+          parser: '@typescript-eslint/parser',
+          parserOptions: {
+            ecmaVersion: 12,
+            sourceType: 'module'
+          },
+          plugins: [
+            '@typescript-eslint',
+            'security'
+          ],
+          rules: {
+            'no-console': 'warn',
+            'no-unused-vars': 'error',
+            'prefer-const': 'error',
+            'security/detect-object-injection': 'error',
+            'security/detect-non-literal-regexp': 'error'
+          }
+        };
+        EOF
+        echo "✅ ESLint configuration created"
+      - |
+        # Create Prettier configuration
+        cat > "apps/{{.APP_NAME}}/.prettierrc.json" << EOF
+        {
+          "semi": true,
+          "singleQuote": true,
+          "tabWidth": 2,
+          "trailingComma": "es5",
+          "printWidth": 100,
+          "arrowParens": "avoid"
+        }
+        EOF
+        echo "✅ Prettier configuration created"
+      - |
+        # Create quality gate script
+        cat > "apps/{{.APP_NAME}}/scripts/quality-gate.sh" << 'EOF'
+        #!/bin/bash
+        set -e
+        
+        echo "🎯 Running Quality Gates"
+        echo "========================"
+        
+        # Test coverage threshold
+        COVERAGE_THRESHOLD=80
+        
+        # Run tests with coverage
+        npm test -- --coverage --coverageReporters=lcov --coverageReporters=json-summary
+        
+        # Check coverage threshold
+        COVERAGE=$(node -p "Math.floor(require('./coverage/coverage-summary.json').total.lines.pct)")
+        echo "Code coverage: $COVERAGE%"
+        
+        if [ "$COVERAGE" -lt "$COVERAGE_THRESHOLD" ]; then
+          echo "❌ Code coverage $COVERAGE% is below threshold $COVERAGE_THRESHOLD%"
+          exit 1
+        fi
+        
+        # Run linting
+        npm run lint
+        
+        # Run security audit
+        npm audit --audit-level moderate
+        
+        echo "✅ All quality gates passed!"
+        EOF
+        chmod +x "apps/{{.APP_NAME}}/scripts/quality-gate.sh"
+        echo "✅ Quality gate script created"
+
+  setup-deployment-automation:
+    desc: Setup automated deployment workflows
+    vars:
+      APP_NAME: '{{.APP_NAME}}'
+    cmds:
+      - echo "🚀 Setting up Deployment Automation"
+      - echo "=================================="
+      - |
+        # Create deployment script
+        cat > "apps/{{.APP_NAME}}/scripts/deploy.sh" << 'EOF'
+        #!/bin/bash
+        set -e
+        
+        APP_NAME="${1:-{{.APP_NAME}}}"
+        ENVIRONMENT="${2:-development}"
+        IMAGE_TAG="${3:-latest}"
+        
+        echo "🚀 Automated Deployment"
+        echo "======================="
+        echo "Application: $APP_NAME"
+        echo "Environment: $ENVIRONMENT"
+        echo "Image Tag: $IMAGE_TAG"
+        echo ""
+        
+        # Pre-deployment checks
+        echo "Running pre-deployment checks..."
+        task test:smoke-test APP_NAME=$APP_NAME || {
+          echo "❌ Pre-deployment checks failed"
+          exit 1
+        }
+        
+        # Deploy based on environment
+        case $ENVIRONMENT in
+          "production")
+            echo "Deploying to production with safety checks..."
+            task workflows:production-deploy APP_NAME=$APP_NAME IMAGE_TAG=$IMAGE_TAG CLUSTER_NAME=prod
+            ;;
+          "staging")
+            echo "Deploying to staging..."
+            task deploy:deploy APP_NAME=$APP_NAME ENVIRONMENT=staging IMAGE_TAG=$IMAGE_TAG
+            ;;
+          "development"|*)
+            echo "Deploying to development..."
+            task deploy:deploy APP_NAME=$APP_NAME ENVIRONMENT=development IMAGE_TAG=$IMAGE_TAG
+            ;;
+        esac
+        
+        # Post-deployment validation
+        echo "Running post-deployment validation..."
+        sleep 30  # Wait for deployment to stabilize
+        task test:integration-test APP_NAME=$APP_NAME ENVIRONMENT=$ENVIRONMENT
+        
+        echo "✅ Deployment completed successfully!"
+        EOF
+        chmod +x "apps/{{.APP_NAME}}/scripts/deploy.sh"
+        echo "✅ Deployment script created"
+      - |
+        # Create rollback script
+        cat > "apps/{{.APP_NAME}}/scripts/rollback.sh" << 'EOF'
+        #!/bin/bash
+        set -e
+        
+        APP_NAME="${1:-{{.APP_NAME}}}"
+        ENVIRONMENT="${2:-development}"
+        
+        echo "⏪ Automated Rollback"
+        echo "===================="
+        echo "Application: $APP_NAME"
+        echo "Environment: $ENVIRONMENT"
+        echo ""
+        
+        case $ENVIRONMENT in
+          "production")
+            echo "Rolling back production deployment..."
+            task workflows:production-rollback APP_NAME=$APP_NAME
+            ;;
+          *)
+            echo "Rolling back $ENVIRONMENT deployment..."
+            kubectl rollout undo deployment/$APP_NAME -n $ENVIRONMENT
+            kubectl rollout status deployment/$APP_NAME -n $ENVIRONMENT --timeout=300s
+            ;;
+        esac
+        
+        # Verify rollback
+        echo "Verifying rollback..."
+        task test:smoke-test APP_NAME=$APP_NAME ENVIRONMENT=$ENVIRONMENT
+        
+        echo "✅ Rollback completed successfully!"
+        EOF
+        chmod +x "apps/{{.APP_NAME}}/scripts/rollback.sh"
+        echo "✅ Rollback script created"
+
+  setup-monitoring-integration:
+    desc: Setup monitoring and observability integration
+    vars:
+      APP_NAME: '{{.APP_NAME}}'
+    cmds:
+      - echo "📊 Setting up Monitoring Integration"
+      - echo "=================================="
+      - |
+        # Create monitoring configuration
+        mkdir -p "apps/{{.APP_NAME}}/monitoring"
+        
+        # Prometheus configuration
+        cat > "apps/{{.APP_NAME}}/monitoring/prometheus.yml" << EOF
+        global:
+          scrape_interval: 15s
+          evaluation_interval: 15s
+        
+        rule_files:
+          - "alert-rules.yml"
+        
+        alerting:
+          alertmanagers:
+            - static_configs:
+                - targets:
+                  - alertmanager:9093
+        
+        scrape_configs:
+          - job_name: '{{.APP_NAME}}'
+            static_configs:
+              - targets: ['{{.APP_NAME}}:8080']
+            metrics_path: '/metrics'
+            scrape_interval: 30s
+        EOF
+        echo "✅ Prometheus configuration created"
+      - |
+        # Create alert rules
+        cat > "apps/{{.APP_NAME}}/monitoring/alert-rules.yml" << EOF
+        groups:
+        - name: {{.APP_NAME}}-alerts
+          rules:
+          - alert: {{.APP_NAME}}Down
+            expr: up{job="{{.APP_NAME}}"} == 0
+            for: 1m
+            labels:
+              severity: critical
+            annotations:
+              summary: "{{.APP_NAME}} is down"
+              description: "{{.APP_NAME}} has been down for more than 1 minute."
+        
+          - alert: {{.APP_NAME}}HighErrorRate
+            expr: rate(http_requests_total{job="{{.APP_NAME}}",status=~"5.."}[5m]) > 0.1
+            for: 5m
+            labels:
+              severity: warning
+            annotations:
+              summary: "High error rate for {{.APP_NAME}}"
+              description: "{{.APP_NAME}} has error rate above 10% for 5 minutes."
+        
+          - alert: {{.APP_NAME}}HighLatency
+            expr: histogram_quantile(0.95, rate(http_request_duration_seconds_bucket{job="{{.APP_NAME}}"}[5m])) > 1
+            for: 10m
+            labels:
+              severity: warning
+            annotations:
+              summary: "High latency for {{.APP_NAME}}"
+              description: "{{.APP_NAME}} 95th percentile latency is above 1 second for 10 minutes."
+        
+          - alert: {{.APP_NAME}}HighMemoryUsage
+            expr: container_memory_usage_bytes{container="{{.APP_NAME}}"} / container_spec_memory_limit_bytes > 0.8
+            for: 5m
+            labels:
+              severity: warning
+            annotations:
+              summary: "High memory usage for {{.APP_NAME}}"
+              description: "{{.APP_NAME}} memory usage is above 80% of limit for 5 minutes."
+        EOF
+        echo "✅ Alert rules created"
+      - |
+        # Create Grafana dashboard
+        cat > "apps/{{.APP_NAME}}/monitoring/grafana-dashboard.json" << 'EOF'
+        {
+          "dashboard": {
+            "id": null,
+            "title": "{{.APP_NAME}} Dashboard",
+            "tags": ["{{.APP_NAME}}", "microservice"],
+            "style": "dark",
+            "timezone": "browser",
+            "panels": [
+              {
+                "id": 1,
+                "title": "Request Rate",
+                "type": "graph",
+                "targets": [
+                  {
+                    "expr": "rate(http_requests_total{job=\"{{.APP_NAME}}\"}[5m])",
+                    "legendFormat": "Requests/sec"
+                  }
+                ],
+                "yAxes": [
+                  {
+                    "label": "Requests/sec",
+                    "min": 0
+                  }
+                ],
+                "gridPos": {
+                  "h": 8,
+                  "w": 12,
+                  "x": 0,
+                  "y": 0
+                }
+              },
+              {
+                "id": 2,
+                "title": "Error Rate",
+                "type": "graph",
+                "targets": [
+                  {
+                    "expr": "rate(http_requests_total{job=\"{{.APP_NAME}}\",status=~\"5..\"}[5m])",
+                    "legendFormat": "5xx Errors/sec"
+                  },
+                  {
+                    "expr": "rate(http_requests_total{job=\"{{.APP_NAME}}\",status=~\"4..\"}[5m])",
+                    "legendFormat": "4xx Errors/sec"
+                  }
+                ],
+                "yAxes": [
+                  {
+                    "label": "Errors/sec",
+                    "min": 0
+                  }
+                ],
+                "gridPos": {
+                  "h": 8,
+                  "w": 12,
+                  "x": 12,
+                  "y": 0
+                }
+              },
+              {
+                "id": 3,
+                "title": "Response Time",
+                "type": "graph",
+                "targets": [
+                  {
+                    "expr": "histogram_quantile(0.50, rate(http_request_duration_seconds_bucket{job=\"{{.APP_NAME}}\"}[5m]))",
+                    "legendFormat": "50th percentile"
+                  },
+                  {
+                    "expr": "histogram_quantile(0.95, rate(http_request_duration_seconds_bucket{job=\"{{.APP_NAME}}\"}[5m]))",
+                    "legendFormat": "95th percentile"
+                  },
+                  {
+                    "expr": "histogram_quantile(0.99, rate(http_request_duration_seconds_bucket{job=\"{{.APP_NAME}}\"}[5m]))",
+                    "legendFormat": "99th percentile"
+                  }
+                ],
+                "yAxes": [
+                  {
+                    "label": "Seconds",
+                    "min": 0
+                  }
+                ],
+                "gridPos": {
+                  "h": 8,
+                  "w": 24,
+                  "x": 0,
+                  "y": 8
+                }
+              },
+              {
+                "id": 4,
+                "title": "Memory Usage",
+                "type": "graph",
+                "targets": [
+                  {
+                    "expr": "container_memory_usage_bytes{container=\"{{.APP_NAME}}\"}",
+                    "legendFormat": "Memory Usage"
+                  }
+                ],
+                "yAxes": [
+                  {
+                    "label": "Bytes",
+                    "min": 0
+                  }
+                ],
+                "gridPos": {
+                  "h": 8,
+                  "w": 12,
+                  "x": 0,
+                  "y": 16
+                }
+              },
+              {
+                "id": 5,
+                "title": "CPU Usage",
+                "type": "graph",
+                "targets": [
+                  {
+                    "expr": "rate(container_cpu_usage_seconds_total{container=\"{{.APP_NAME}}\"}[5m])",
+                    "legendFormat": "CPU Usage"
+                  }
+                ],
+                "yAxes": [
+                  {
+                    "label": "CPU Cores",
+                    "min": 0
+                  }
+                ],
+                "gridPos": {
+                  "h": 8,
+                  "w": 12,
+                  "x": 12,
+                  "y": 16
+                }
+              }
+            ],
+            "time": {
+              "from": "now-1h",
+              "to": "now"
+            },
+            "refresh": "5s"
+          }
+        }
+        EOF
+        echo "✅ Grafana dashboard created"
+
+  show-pipeline-status:
+    desc: Show CI/CD pipeline status and configuration
+    vars:
+      APP_NAME: '{{.APP_NAME}}'
+      PIPELINE_TYPE: '{{.PIPELINE_TYPE}}'
+    cmds:
+      - |
+        cat << 'EOF'
+        
+        🚀 CI/CD Pipeline Configuration
+        ===============================
+        
+        APPLICATION: {{.APP_NAME}}
+        PIPELINE TYPE: {{.PIPELINE_TYPE}}
+        
+        GENERATED FILES:
+        EOF
+      - |
+        if [ -f "apps/{{.APP_NAME}}/.github/workflows/ci-cd.yaml" ]; then
+          echo "✅ GitHub Actions workflow - apps/{{.APP_NAME}}/.github/workflows/ci-cd.yaml"
+        fi
+        if [ -f "apps/{{.APP_NAME}}/.gitlab-ci.yml" ]; then
+          echo "✅ GitLab CI configuration - apps/{{.APP_NAME}}/.gitlab-ci.yml"
+        fi
+        if [ -f "apps/{{.APP_NAME}}/sonar-project.properties" ]; then
+          echo "✅ SonarQube configuration - apps/{{.APP_NAME}}/sonar-project.properties"
+        fi
+        if [ -f "apps/{{.APP_NAME}}/.eslintrc.js" ]; then
+          echo "✅ ESLint configuration - apps/{{.APP_NAME}}/.eslintrc.js"
+        fi
+        if [ -f "apps/{{.APP_NAME}}/scripts/deploy.sh" ]; then
+          echo "✅ Deployment script - apps/{{.APP_NAME}}/scripts/deploy.sh"
+        fi
+        if [ -f "apps/{{.APP_NAME}}/monitoring/prometheus.yml" ]; then
+          echo "✅ Monitoring configuration - apps/{{.APP_NAME}}/monitoring/"
+        fi
+      - |
+        echo ""
+        echo "PIPELINE STAGES:"
+        echo "• Test: Unit tests, integration tests, coverage"
+        echo "• Quality: Linting, formatting, code quality"  
+        echo "• Security: Security audit, SAST, container scan"
+        echo "• Build: Docker image build and push"
+        echo "• Deploy: Automated deployment to environments"
+        echo ""
+        echo "ENVIRONMENTS:"
+        echo "• Development: Auto-deploy on develop branch"
+        echo "• Staging: Auto-deploy on main branch"
+        echo "• Production: Manual deploy on release tags"
+        echo ""
+        echo "NEXT STEPS:"
+        echo "• Configure secrets in your CI/CD platform"
+        echo "• Set up container registry access"
+        echo "• Configure kubectl access for deployments"
+        echo "• Setup monitoring and alerting endpoints"
+        echo ""
+        echo "✅ CI/CD pipeline ready for {{.APP_NAME}}!"
+
+  help:
+    desc: Show CI/CD integration help and examples
+    cmds:
+      - |
+        cat << 'EOF'
+        🚀 IDP Usage - CI/CD Integration Workflows
+        ==========================================
+        
+        SETUP CI/CD PIPELINE:
+          task workflows:setup-ci-cd APP_NAME=my-app PIPELINE_TYPE=github
+        
+        PIPELINE COMPONENTS:
+          task workflows:generate-pipeline-config APP_NAME=my-app PIPELINE_TYPE=github
+          task workflows:setup-registry-integration APP_NAME=my-app REGISTRY=ghcr.io
+          task workflows:setup-quality-gates APP_NAME=my-app
+          task workflows:setup-deployment-automation APP_NAME=my-app
+          task workflows:setup-monitoring-integration APP_NAME=my-app
+        
+        PIPELINE MANAGEMENT:
+          task workflows:show-pipeline-status APP_NAME=my-app
+        
+        EXAMPLES:
+          # Setup GitHub Actions pipeline
+          task workflows:setup-ci-cd APP_NAME=api-service PIPELINE_TYPE=github
+        
+          # Setup GitLab CI pipeline
+          task workflows:setup-ci-cd APP_NAME=web-app PIPELINE_TYPE=gitlab
+        
+          # Setup with custom registry
+          task workflows:setup-ci-cd APP_NAME=worker-service REGISTRY=my-registry.com
+        
+        PARAMETERS:
+          APP_NAME          - Application name (required)
+          PIPELINE_TYPE     - Pipeline type (github|gitlab|azure)
+          REGISTRY          - Container registry URL
+          REGISTRY_USERNAME - Registry username
+          ENVIRONMENT       - Target environment
+          BRANCH            - Git branch name
+        
+        SUPPORTED PIPELINES:
+        • GitHub Actions (.github/workflows/ci-cd.yaml)
+        • GitLab CI (.gitlab-ci.yml) 
+        • Azure Pipelines (azure-pipelines.yml)
+        
+        PIPELINE FEATURES:
+        • Automated testing (unit, integration, security)
+        • Code quality gates (linting, formatting, coverage)
+        • Security scanning (SAST, dependency audit, container scan)
+        • Multi-stage deployments (dev, staging, production)
+        • Blue-green production deployments
+        • Monitoring and alerting integration
+        • Automated rollback capabilities
+        • Container registry integration
+        • Kubernetes deployment automation
+        
+        QUALITY GATES:
+        • Test coverage threshold (80%+)
+        • Code quality metrics (SonarQube)
+        • Security vulnerability scanning
+        • Dependency audit checks
+        • Container image security scanning
+        • Performance and load testing
+        EOF

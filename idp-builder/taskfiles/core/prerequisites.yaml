@@ -1,0 +1,344 @@
+version: '3'
+
+# ===============================
+# Prerequisites Management
+# ===============================
+
+vars:
+  # Standardized parameters
+  CLUSTER_NAME: '{{.CLUSTER_NAME | default "idp-cluster"}}'
+  PROVIDER: '{{.PROVIDER | default "kind"}}'
+  ENVIRONMENT: '{{.ENVIRONMENT | default "dev"}}'
+
+tasks:
+
+  # ===============================
+  # Main Prerequisite Checks
+  # ===============================
+
+  check-prerequisites:
+    desc: Check all prerequisites for IDP Builder (alias for check-all)
+    aliases: [check-all]
+    vars:
+      SKIP_DOCKER: '{{.SKIP_DOCKER | default "false"}}'
+      SKIP_KUBECTL: '{{.SKIP_KUBECTL | default "false"}}'
+    cmds:
+      - echo "🔍 Checking prerequisites for PROVIDER={{.PROVIDER}} ENVIRONMENT={{.ENVIRONMENT}}"
+      - task: check-system-requirements
+      - task: check-kubernetes-tools
+      - task: check-container-tools  
+      - task: check-common-tools
+      - task: check-provider-tools
+        vars:
+          PROVIDER: '{{.PROVIDER}}'
+      - task: check-authentication
+        vars:
+          PROVIDER: '{{.PROVIDER}}'
+      - echo "✅ All prerequisites check complete for {{.PROVIDER}} provider"
+
+  install-prerequisites:
+    desc: Install all prerequisite tools (alias for install-all) 
+    aliases: [install-all]
+    vars:
+      INSTALL_TOOLS: '{{.INSTALL_TOOLS | default "true"}}'
+      SKIP_DOCKER: '{{.SKIP_DOCKER | default "false"}}'
+      SKIP_KUBECTL: '{{.SKIP_KUBECTL | default "false"}}'
+    cmds:
+      - echo "🔧 Installing prerequisites for PROVIDER={{.PROVIDER}}..."
+      - task: check-system-requirements
+      - task: install-missing-tools
+        vars:
+          INSTALL_TOOLS: '{{.INSTALL_TOOLS}}'
+          PROVIDER: '{{.PROVIDER}}'
+      - echo "✅ Prerequisite installation complete"
+
+  check-minimal:
+    desc: Check minimal prerequisites for quick-start (kubectl, docker, kind)
+    cmds:
+      - echo "🔍 Checking minimal prerequisites..."
+      - task: _check-tool
+        vars:
+          TOOL: kubectl
+          DESC: "Kubernetes CLI"
+          INSTALL: "https://kubernetes.io/docs/tasks/tools/install-kubectl/"
+      - task: _check-tool
+        vars:
+          TOOL: docker
+          DESC: "Docker container runtime"
+          INSTALL: "https://docs.docker.com/get-docker/"
+      - task: _check-tool
+        vars:
+          TOOL: kind
+          DESC: "Kubernetes in Docker"
+          INSTALL: "https://kind.sigs.k8s.io/docs/user/quick-start/#installation"
+      - echo ""
+      - echo "✅ Minimal prerequisites check complete!"
+      - echo "Ready for quick-start setup with kind provider."
+
+  # ===============================
+  # System Requirements
+  # ===============================
+
+  check-system-requirements:
+    desc: Check basic system requirements
+    cmds:
+      - echo "🖥️ Checking system requirements..."
+      - |
+        # Check OS
+        if command -v uname >/dev/null 2>&1; then
+          OS=$(uname -s)
+          ARCH=$(uname -m)
+          echo "✅ Operating System: $OS ($ARCH)"
+        else
+          echo "❌ Cannot determine operating system"
+          exit 1
+        fi
+      - |
+        # Check memory (minimum 4GB recommended)
+        if command -v free >/dev/null 2>&1; then
+          MEMORY_GB=$(free -g | awk 'NR==2{printf "%.1f", $2}')
+          echo "✅ Memory: ${MEMORY_GB}GB available"
+          if [ "$(echo "$MEMORY_GB < 4" | bc -l)" -eq 1 ]; then
+            echo "⚠️ Warning: Less than 4GB memory available. Consider upgrading for better performance."
+          fi
+        else
+          echo "ℹ️ Memory check not available on this system"
+        fi
+      - |
+        # Check disk space (minimum 10GB recommended)
+        DISK_GB=$(df -BG . | awk 'NR==2 {print $4}' | sed 's/G//')
+        echo "✅ Disk space: ${DISK_GB}GB available"
+        if [ "$DISK_GB" -lt 10 ]; then
+          echo "⚠️ Warning: Less than 10GB disk space available"
+        fi
+
+  # ===============================
+  # Kubernetes Tools
+  # ===============================
+
+  check-kubernetes-tools:
+    desc: Check Kubernetes-related tools
+    cmds:
+      - echo "☸️ Checking Kubernetes tools..."
+      - task: _check-tool
+        vars:
+          TOOL: kubectl
+          DESC: "Kubernetes CLI"
+          INSTALL: "https://kubernetes.io/docs/tasks/tools/install-kubectl/"
+      - task: _check-tool
+        vars:
+          TOOL: helm
+          DESC: "Helm package manager"
+          INSTALL: "https://helm.sh/docs/intro/install/"
+      - task: _check-tool
+        vars:
+          TOOL: kind
+          DESC: "Kubernetes in Docker"
+          INSTALL: "https://kind.sigs.k8s.io/docs/user/quick-start/#installation"
+
+  # ===============================
+  # Container Tools
+  # ===============================
+
+  check-container-tools:
+    desc: Check container-related tools
+    vars:
+      SKIP_DOCKER: '{{.SKIP_DOCKER | default "false"}}'
+    cmds:
+      - echo "🐳 Checking container tools..."
+      - task: _check-tool
+        vars:
+          TOOL: docker
+          DESC: "Docker container runtime"
+          INSTALL: "https://docs.docker.com/get-docker/"
+
+  # ===============================
+  # Common Development Tools
+  # ===============================
+
+  check-common-tools:
+    desc: Check common development tools
+    cmds:
+      - echo "🛠️ Checking common tools..."
+      - task: _check-tool
+        vars:
+          TOOL: git
+          DESC: "Git version control"
+          INSTALL: "https://git-scm.com/downloads"
+      - task: _check-tool
+        vars:
+          TOOL: curl
+          DESC: "HTTP client"
+          INSTALL: "Usually pre-installed or available via package manager"
+      - task: _check-optional-tool
+        vars:
+          TOOL: jq
+          DESC: "JSON processor"
+          INSTALL: "https://stedolan.github.io/jq/download/"
+      - task: _check-optional-tool
+        vars:
+          TOOL: yq
+          DESC: "YAML processor"
+          INSTALL: "https://github.com/mikefarah/yq#install"
+
+  # ===============================
+  # Provider-Specific Tools
+  # ===============================
+
+  check-provider-tools:
+    desc: Check cloud provider CLI tools based on PROVIDER
+    vars:
+      PROVIDER: '{{.PROVIDER}}'
+    cmds:
+      - echo "☁️ Checking tools for provider {{.PROVIDER}}"
+      - |
+        case "{{.PROVIDER}}" in
+          aws)
+            task _check-tool TOOL=aws DESC="AWS CLI" INSTALL="https://docs.aws.amazon.com/cli/latest/userguide/install-cliv2.html"
+            task _check-optional-tool TOOL=eksctl DESC="EKS cluster management" INSTALL="https://eksctl.io/introduction/#installation"
+            ;;
+          gcp)
+            task _check-tool TOOL=gcloud DESC="Google Cloud CLI" INSTALL="https://cloud.google.com/sdk/docs/install"
+            ;;
+          azure)
+            task _check-tool TOOL=az DESC="Azure CLI" INSTALL="https://docs.microsoft.com/en-us/cli/azure/install-azure-cli"
+            ;;
+          kind)
+            echo "✅ Kind provider - no additional tools required"
+            ;;
+          *)
+            echo "⚠️ Unknown provider {{.PROVIDER}}"
+            ;;
+        esac
+
+  # ===============================
+  # Authentication Checks
+  # ===============================
+
+  check-authentication:
+    desc: Check authentication for specified provider
+    vars:
+      PROVIDER: '{{.PROVIDER}}'
+    cmds:
+      - echo "🔐 Checking authentication for provider {{.PROVIDER}}"
+      - |
+        case "{{.PROVIDER}}" in
+          aws)
+            if command -v aws >/dev/null 2>&1; then
+              if aws sts get-caller-identity >/dev/null 2>&1; then
+                echo "✅ AWS authentication working"
+                aws sts get-caller-identity --output table
+              else
+                echo "❌ AWS authentication failed - run 'aws configure' or set credentials"
+                exit 1
+              fi
+            else
+              echo "⚠️ AWS CLI not installed - skipping authentication check"
+            fi
+            ;;
+          gcp)
+            if command -v gcloud >/dev/null 2>&1; then
+              if gcloud auth list --filter=status:ACTIVE --format="value(account)" | head -n1 >/dev/null 2>&1; then
+                ACCOUNT=$(gcloud auth list --filter=status:ACTIVE --format="value(account)" | head -n1)
+                echo "✅ GCP authentication working for: $ACCOUNT"
+                gcloud config get-value project 2>/dev/null || echo "⚠️ No default project set"
+              else
+                echo "❌ GCP authentication failed - run 'gcloud auth login'"
+                exit 1
+              fi
+            else
+              echo "⚠️ gcloud CLI not installed - skipping authentication check"
+            fi
+            ;;
+          azure)
+            if command -v az >/dev/null 2>&1; then
+              if az account show >/dev/null 2>&1; then
+                echo "✅ Azure authentication working"
+                az account show --output table
+              else
+                echo "❌ Azure authentication failed - run 'az login'"
+                exit 1
+              fi
+            else
+              echo "⚠️ Azure CLI not installed - skipping authentication check"
+            fi
+            ;;
+          kind)
+            echo "✅ Kind provider - no authentication required"
+            ;;
+          *)
+            echo "⚠️ Unknown provider {{.PROVIDER}}"
+            ;;
+        esac
+
+  # ===============================
+  # Installation Helper
+  # ===============================
+
+  install-missing-tools:
+    desc: Install commonly missing tools (basic implementation)
+    vars:
+      INSTALL_TOOLS: '{{.INSTALL_TOOLS | default "true"}}'
+      PROVIDER: '{{.PROVIDER | default "kind"}}'
+    cmds:
+      - |
+        if [ "{{.INSTALL_TOOLS}}" = "false" ]; then
+          echo "⏭️ Skipping tool installation (INSTALL_TOOLS=false)"
+          exit 0
+        fi
+        
+        echo "🔧 Attempting to install missing tools..."
+        echo "Note: This is a basic implementation. Manual installation may be required."
+        
+        # Try to install common tools via package manager
+        if command -v apt-get >/dev/null 2>&1; then
+          echo "📦 Debian/Ubuntu detected - using apt-get"
+          sudo apt-get update && sudo apt-get install -y curl git jq
+        elif command -v yum >/dev/null 2>&1; then
+          echo "📦 RHEL/CentOS detected - using yum"
+          sudo yum install -y curl git jq
+        elif command -v brew >/dev/null 2>&1; then
+          echo "📦 macOS detected - using brew"
+          brew install curl git jq yq
+        else
+          echo "❌ No supported package manager found"
+          echo "Please install tools manually according to their documentation"
+          exit 1
+        fi
+
+  # ===============================
+  # Internal Helper Tasks
+  # ===============================
+
+  _check-tool:
+    internal: true
+    vars:
+      TOOL: '{{.TOOL}}'
+      DESC: '{{.DESC}}'
+      INSTALL: '{{.INSTALL}}'
+    cmds:
+      - |
+        if command -v {{.TOOL}} >/dev/null 2>&1; then
+          VERSION=$({{.TOOL}} --version 2>/dev/null | head -n1 | cut -d' ' -f1-3 || echo "version unknown")
+          echo "✅ {{.DESC}} ({{.TOOL}}): $VERSION"
+        else
+          echo "❌ {{.DESC}} ({{.TOOL}}) Not found"
+          echo "   Install from {{.INSTALL}}"
+          exit 1
+        fi
+
+  _check-optional-tool:
+    internal: true
+    vars:
+      TOOL: '{{.TOOL}}'
+      DESC: '{{.DESC}}'
+      INSTALL: '{{.INSTALL}}'
+    cmds:
+      - |
+        if command -v {{.TOOL}} >/dev/null 2>&1; then
+          VERSION=$({{.TOOL}} --version 2>/dev/null | head -n1 | cut -d' ' -f1-3 || echo "version unknown")
+          echo "✅ {{.DESC}} ({{.TOOL}}): $VERSION"
+        else
+          echo "⚠️ {{.DESC}} ({{.TOOL}}) Not found (optional)"
+          echo "   Install from {{.INSTALL}}"
+        fi

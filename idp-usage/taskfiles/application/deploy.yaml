@@ -1,0 +1,309 @@
+version: '3'
+
+# ===============================
+# Application Deployment Management
+# ===============================
+
+vars:
+  # Standardized parameters
+  APP_NAME: '{{.APP_NAME | default "sample-go-app"}}'
+  ENVIRONMENT: '{{.ENVIRONMENT | default "dev"}}'
+  NAMESPACE: '{{.NAMESPACE | default "default"}}'
+  
+  # Deployment configuration
+  IMAGE_TAG: '{{.IMAGE_TAG | default "latest"}}'
+  REGISTRY: '{{.REGISTRY | default "localhost:5000"}}'
+  REPLICAS: '{{.REPLICAS | default "1"}}'
+  DEPLOYMENT_TIMEOUT: '{{.DEPLOYMENT_TIMEOUT | default "300s"}}'
+
+tasks:
+
+  # ===============================
+  # Application Deployment
+  # ===============================
+
+  deploy:
+    desc: Deploy application to Kubernetes cluster
+    vars:
+      APP_NAME: '{{.APP_NAME}}'
+      ENVIRONMENT: '{{.ENVIRONMENT}}'
+      NAMESPACE: '{{.NAMESPACE}}'
+      IMAGE_TAG: '{{.IMAGE_TAG}}'
+    cmds:
+      - echo "🚀 Deploying {{.APP_NAME}} to {{.ENVIRONMENT}} environment"
+      - task: _validate-deployment-requirements
+        vars:
+          APP_NAME: '{{.APP_NAME}}'
+          NAMESPACE: '{{.NAMESPACE}}'
+      - task: _create-namespace
+        vars:
+          NAMESPACE: '{{.NAMESPACE}}'
+      - task: _deploy-application
+        vars:
+          APP_NAME: '{{.APP_NAME}}'
+          ENVIRONMENT: '{{.ENVIRONMENT}}'
+          NAMESPACE: '{{.NAMESPACE}}'
+          IMAGE_TAG: '{{.IMAGE_TAG}}'
+      - task: _wait-for-deployment
+        vars:
+          APP_NAME: '{{.APP_NAME}}'
+          NAMESPACE: '{{.NAMESPACE}}'
+      - echo "✅ Deployment complete {{.APP_NAME}} in {{.NAMESPACE}}"
+
+  undeploy:
+    desc: Remove application deployment from Kubernetes
+    vars:
+      APP_NAME: '{{.APP_NAME}}'
+      NAMESPACE: '{{.NAMESPACE}}'
+    cmds:
+      - echo "🗑️ Undeploying {{.APP_NAME}} from {{.NAMESPACE}}"
+      - task: _confirm-undeploy
+        vars:
+          APP_NAME: '{{.APP_NAME}}'
+          NAMESPACE: '{{.NAMESPACE}}'
+      - kubectl delete -f apps/{{.APP_NAME}}/k8s/ -n {{.NAMESPACE}} --ignore-not-found=true
+      - echo "✅ Undeployment complete"
+
+  # ===============================
+  # Application Scaling
+  # ===============================
+
+  scale:
+    desc: Scale application deployment
+    vars:
+      APP_NAME: '{{.APP_NAME}}'
+      NAMESPACE: '{{.NAMESPACE}}'
+      REPLICAS: '{{.REPLICAS}}'
+    cmds:
+      - echo "📏 Scaling {{.APP_NAME}} to {{.REPLICAS}} replicas"
+      - kubectl scale deployment {{.APP_NAME}} --replicas={{.REPLICAS}} -n {{.NAMESPACE}}
+      - kubectl rollout status deployment/{{.APP_NAME}} -n {{.NAMESPACE}} --timeout={{.DEPLOYMENT_TIMEOUT}}
+      - echo "✅ Scaling complete"
+
+  restart:
+    desc: Restart application deployment (rolling restart)
+    vars:
+      APP_NAME: '{{.APP_NAME}}'
+      NAMESPACE: '{{.NAMESPACE}}'
+    cmds:
+      - echo "🔄 Restarting {{.APP_NAME}} deployment"
+      - kubectl rollout restart deployment/{{.APP_NAME}} -n {{.NAMESPACE}}
+      - kubectl rollout status deployment/{{.APP_NAME}} -n {{.NAMESPACE}} --timeout={{.DEPLOYMENT_TIMEOUT}}
+      - echo "✅ Restart complete"
+
+  # ===============================
+  # Deployment Status and Health
+  # ===============================
+
+  status:
+    desc: Show application deployment status
+    vars:
+      APP_NAME: '{{.APP_NAME}}'
+      NAMESPACE: '{{.NAMESPACE}}'
+    cmds:
+      - echo "📊 Deployment Status for {{.APP_NAME}} in {{.NAMESPACE}}"
+      - echo "=================================================="
+      - echo ""
+      - echo "🏃 Pods"
+      - kubectl get pods -l app={{.APP_NAME}} -n {{.NAMESPACE}} -o wide
+      - echo ""
+      - echo "🚀 Deployments"
+      - kubectl get deployments -l app={{.APP_NAME}} -n {{.NAMESPACE}}
+      - echo ""
+      - echo "🌐 Services"
+      - kubectl get services -l app={{.APP_NAME}} -n {{.NAMESPACE}}
+      - echo ""
+      - echo "🔗 Ingress"
+      - kubectl get ingress -l app={{.APP_NAME}} -n {{.NAMESPACE}} 2>/dev/null || echo "No ingress found"
+
+  logs:
+    desc: Show application logs
+    vars:
+      APP_NAME: '{{.APP_NAME}}'
+      NAMESPACE: '{{.NAMESPACE}}'
+      LINES: '{{.LINES | default "100"}}'
+      FOLLOW: '{{.FOLLOW | default "false"}}'
+    cmds:
+      - echo "📄 Logs for {{.APP_NAME}} (last {{.LINES}} lines)"
+      - |
+        if [ "{{.FOLLOW}}" = "true" ]; then
+          kubectl logs -f deployment/{{.APP_NAME}} -n {{.NAMESPACE}} --tail={{.LINES}}
+        else
+          kubectl logs deployment/{{.APP_NAME}} -n {{.NAMESPACE}} --tail={{.LINES}}
+        fi
+
+  health-check:
+    desc: Perform health check on deployed application
+    vars:
+      APP_NAME: '{{.APP_NAME}}'
+      NAMESPACE: '{{.NAMESPACE}}'
+    cmds:
+      - echo "🏥 Health Check for {{.APP_NAME}}"
+      - echo "================================"
+      - |
+        # Check if deployment exists
+        if kubectl get deployment {{.APP_NAME}} -n {{.NAMESPACE}} >/dev/null 2>&1; then
+          READY=$(kubectl get deployment {{.APP_NAME}} -n {{.NAMESPACE}} -o jsonpath='{.status.readyReplicas}')
+          DESIRED=$(kubectl get deployment {{.APP_NAME}} -n {{.NAMESPACE}} -o jsonpath='{.spec.replicas}')
+          if [ "$READY" = "$DESIRED" ] && [ "$READY" != "0" ]; then
+            echo "✅ Deployment healthy ($READY/$DESIRED ready)"
+          else
+            echo "❌ Deployment unhealthy ($READY/$DESIRED ready)"
+            exit 1
+          fi
+        else
+          echo "❌ Deployment {{.APP_NAME}} not found"
+          exit 1
+        fi
+        
+        # Check service connectivity
+        if kubectl get service {{.APP_NAME}}-service -n {{.NAMESPACE}} >/dev/null 2>&1; then
+          echo "✅ Service available"
+        else
+          echo "⚠️ Service not found"
+        fi
+
+  # ===============================
+  # Environment-Specific Deployments
+  # ===============================
+
+  deploy-dev:
+    desc: Deploy application to development environment
+    vars:
+      APP_NAME: '{{.APP_NAME}}'
+    cmds:
+      - task: deploy
+        vars:
+          APP_NAME: '{{.APP_NAME}}'
+          ENVIRONMENT: "dev"
+          NAMESPACE: "{{.APP_NAME}}-dev"
+          IMAGE_TAG: "dev"
+          REPLICAS: "1"
+
+  deploy-staging:
+    desc: Deploy application to staging environment
+    vars:
+      APP_NAME: '{{.APP_NAME}}'
+    cmds:
+      - task: deploy
+        vars:
+          APP_NAME: '{{.APP_NAME}}'
+          ENVIRONMENT: "staging"
+          NAMESPACE: "{{.APP_NAME}}-staging"
+          IMAGE_TAG: "staging"
+          REPLICAS: "2"
+
+  deploy-production:
+    desc: Deploy application to production environment
+    vars:
+      APP_NAME: '{{.APP_NAME}}'
+    cmds:
+      - task: deploy
+        vars:
+          APP_NAME: '{{.APP_NAME}}'
+          ENVIRONMENT: "production"
+          NAMESPACE: "{{.APP_NAME}}-prod"
+          IMAGE_TAG: "latest"
+          REPLICAS: "3"
+
+  # ===============================
+  # Port Forwarding and Access
+  # ===============================
+
+  port-forward:
+    desc: Create port-forward to access application locally
+    vars:
+      APP_NAME: '{{.APP_NAME}}'
+      NAMESPACE: '{{.NAMESPACE}}'
+      LOCAL_PORT: '{{.LOCAL_PORT | default "8080"}}'
+      TARGET_PORT: '{{.TARGET_PORT | default "8080"}}'
+    cmds:
+      - echo "🔗 Port forwarding {{.APP_NAME}} to localhost {{.LOCAL_PORT}}"
+      - echo "Access application at http://localhost {{.LOCAL_PORT}}"
+      - kubectl port-forward deployment/{{.APP_NAME}} {{.LOCAL_PORT}}:{{.TARGET_PORT}} -n {{.NAMESPACE}}
+
+  # ===============================
+  # Internal Helper Tasks
+  # ===============================
+
+  _validate-deployment-requirements:
+    internal: true
+    vars:
+      APP_NAME: '{{.APP_NAME}}'
+      NAMESPACE: '{{.NAMESPACE}}'
+    cmds:
+      - echo "🔍 Validating deployment requirements"
+      - |
+        # Check if kubectl is available
+        if ! command -v kubectl >/dev/null 2>&1; then
+          echo "❌ kubectl is required but not installed"
+          exit 1
+        fi
+        
+        # Check cluster connectivity
+        if ! kubectl cluster-info >/dev/null 2>&1; then
+          echo "❌ Cannot connect to Kubernetes cluster"
+          exit 1
+        fi
+        
+        # Check if app k8s manifests exist
+        if [ ! -d "apps/{{.APP_NAME}}/k8s" ]; then
+          echo "❌ Kubernetes manifests not found apps/{{.APP_NAME}}/k8s/"
+          exit 1
+        fi
+        
+        echo "✅ Deployment requirements validated"
+
+  _create-namespace:
+    internal: true
+    vars:
+      NAMESPACE: '{{.NAMESPACE}}'
+    cmds:
+      - |
+        if [ "{{.NAMESPACE}}" != "default" ]; then
+          kubectl create namespace {{.NAMESPACE}} --dry-run=client -o yaml | kubectl apply -f -
+          echo "✅ Namespace {{.NAMESPACE}} ready"
+        fi
+
+  _deploy-application:
+    internal: true
+    vars:
+      APP_NAME: '{{.APP_NAME}}'
+      ENVIRONMENT: '{{.ENVIRONMENT}}'
+      NAMESPACE: '{{.NAMESPACE}}'
+      IMAGE_TAG: '{{.IMAGE_TAG}}'
+    cmds:
+      - |
+        # Apply Kubernetes manifests
+        kubectl apply -f apps/{{.APP_NAME}}/k8s/ -n {{.NAMESPACE}}
+        
+        # Update image tag if specified
+        if [ "{{.IMAGE_TAG}}" != "latest" ]; then
+          kubectl set image deployment/{{.APP_NAME}} {{.APP_NAME}}={{.APP_NAME}}:{{.IMAGE_TAG}} -n {{.NAMESPACE}}
+        fi
+
+  _wait-for-deployment:
+    internal: true
+    vars:
+      APP_NAME: '{{.APP_NAME}}'
+      NAMESPACE: '{{.NAMESPACE}}'
+    cmds:
+      - echo "⏳ Waiting for deployment to be ready"
+      - kubectl rollout status deployment/{{.APP_NAME}} -n {{.NAMESPACE}} --timeout={{.DEPLOYMENT_TIMEOUT}}
+
+  _confirm-undeploy:
+    internal: true
+    vars:
+      APP_NAME: '{{.APP_NAME}}'
+      NAMESPACE: '{{.NAMESPACE}}'
+    cmds:
+      - |
+        echo "⚠️ WARNING This will delete {{.APP_NAME}} from namespace {{.NAMESPACE}}"
+        echo "This action cannot be undone."
+        echo ""
+        read -p "Are you sure you want to continue? (y/N) " -n 1 -r
+        echo ""
+        if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+          echo "❌ Operation cancelled"
+          exit 1
+        fi

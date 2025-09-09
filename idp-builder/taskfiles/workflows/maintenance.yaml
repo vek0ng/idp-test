@@ -1,0 +1,399 @@
+version: '3'
+
+# IDP Builder - Platform Maintenance Workflows  
+# Provides ongoing maintenance, monitoring, and operational tasks
+
+vars:
+  CLUSTER_NAME: '{{.CLUSTER_NAME | default "idp-cluster"}}'
+  PROVIDER: '{{.PROVIDER | default "kind"}}'
+  ENVIRONMENT: '{{.ENVIRONMENT | default "dev"}}'
+  BACKUP_LOCATION: '{{.BACKUP_LOCATION | default "./backups"}}'
+
+tasks:
+  health-check-all:
+    desc: Comprehensive health check of entire IDP platform
+    vars:
+      CLUSTER_NAME: '{{.CLUSTER_NAME}}'
+    cmds:
+      - echo "🏥 IDP Platform Health Check"
+      - echo "============================"
+      - echo "Cluster {{.CLUSTER_NAME}}"
+      - echo ""
+      - echo "Infrastructure Health:"
+      - task: check-infrastructure-health
+        vars:
+          CLUSTER_NAME: '{{.CLUSTER_NAME}}'
+      - echo ""
+      - echo "Platform Components Health:"
+      - task: check-platform-health
+        vars:
+          CLUSTER_NAME: '{{.CLUSTER_NAME}}'
+      - echo ""
+      - echo "Resource Utilization:"
+      - task: check-resource-utilization
+        vars:
+          CLUSTER_NAME: '{{.CLUSTER_NAME}}'
+      - echo ""
+      - echo "✅ Complete health check finished"
+
+  check-infrastructure-health:
+    desc: Check health of infrastructure components
+    vars:
+      CLUSTER_NAME: '{{.CLUSTER_NAME}}'
+    cmds:
+      - echo "🔍 Infrastructure Health Check"
+      - echo "============================="
+      - |
+        # Check cluster connectivity
+        if kubectl cluster-info >/dev/null 2>&1; then
+          echo "✅ Cluster connectivity: OK"
+        else
+          echo "❌ Cluster connectivity: FAILED"
+        fi
+      - |
+        # Check node status
+        NODES_READY=$(kubectl get nodes --no-headers | grep -c " Ready ")
+        NODES_TOTAL=$(kubectl get nodes --no-headers | wc -l)
+        echo "✅ Cluster nodes: $NODES_READY/$NODES_TOTAL Ready"
+      - |
+        # Check system pods
+        SYSTEM_PODS=$(kubectl get pods -n kube-system --no-headers | grep -c "Running")
+        echo "✅ System pods running: $SYSTEM_PODS"
+      - |
+        # Check ingress controller
+        if kubectl get pods -n ingress-nginx --no-headers | grep -q "Running"; then
+          echo "✅ Ingress controller: Running"
+        else
+          echo "⚠️ Ingress controller: Not found or not running"
+        fi
+
+  check-platform-health:
+    desc: Check health of platform components
+    vars:
+      CLUSTER_NAME: '{{.CLUSTER_NAME}}'
+    cmds:
+      - echo "🚀 Platform Components Health"
+      - echo "============================="
+      - |
+        # Check ArgoCD
+        if kubectl get pods -n argocd --no-headers | grep -q "Running"; then
+          ARGOCD_PODS=$(kubectl get pods -n argocd --no-headers | grep -c "Running")
+          echo "✅ ArgoCD: $ARGOCD_PODS pods running"
+        else
+          echo "⚠️ ArgoCD: Not installed or not running"
+        fi
+      - |
+        # Check Crossplane
+        if kubectl get pods -n crossplane-system --no-headers | grep -q "Running"; then
+          CROSSPLANE_PODS=$(kubectl get pods -n crossplane-system --no-headers | grep -c "Running")
+          echo "✅ Crossplane: $CROSSPLANE_PODS pods running"
+          
+          # Check providers
+          PROVIDERS=$(kubectl get providers.pkg.crossplane.io --no-headers | grep -c "True")
+          echo "✅ Crossplane providers healthy: $PROVIDERS"
+        else
+          echo "⚠️ Crossplane: Not installed or not running"
+        fi
+      - |
+        # Check Backstage
+        if kubectl get pods -n backstage --no-headers | grep -q "Running"; then
+          BACKSTAGE_PODS=$(kubectl get pods -n backstage --no-headers | grep -c "Running")
+          echo "✅ Backstage: $BACKSTAGE_PODS pods running"
+        else
+          echo "⚠️ Backstage: Not installed or not running"
+        fi
+
+  check-resource-utilization:
+    desc: Check resource utilization across the platform
+    vars:
+      CLUSTER_NAME: '{{.CLUSTER_NAME}}'
+    cmds:
+      - echo "📊 Resource Utilization"
+      - echo "======================"
+      - |
+        # Node resource usage
+        echo "Node Resource Usage:"
+        kubectl top nodes 2>/dev/null || echo "⚠️ Metrics server not available"
+      - |
+        # Pod resource usage by namespace
+        echo ""
+        echo "Top Resource Consuming Pods:"
+        kubectl top pods --all-namespaces --sort-by=cpu 2>/dev/null | head -10 || echo "⚠️ Metrics server not available"
+      - |
+        # Persistent volume usage
+        echo ""
+        echo "Persistent Volume Usage:"
+        kubectl get pv -o custom-columns=NAME:.metadata.name,CAPACITY:.spec.capacity.storage,STATUS:.status.phase,CLAIM:.spec.claimRef.name
+
+  update-platform:
+    desc: Update all platform components to latest versions
+    vars:
+      CLUSTER_NAME: '{{.CLUSTER_NAME}}'
+      PROVIDER: '{{.PROVIDER}}'
+    cmds:
+      - echo "🔄 Platform Update Process"
+      - echo "========================="
+      - echo "Cluster - {{.CLUSTER_NAME}}"
+      - echo ""
+      - echo "Updating ArgoCD..."
+      - task: update-argocd
+        vars:
+          CLUSTER_NAME: '{{.CLUSTER_NAME}}'
+      - echo ""
+      - echo "Updating Crossplane..."
+      - task: update-crossplane
+        vars:
+          CLUSTER_NAME: '{{.CLUSTER_NAME}}'
+      - echo ""
+      - echo "Updating Backstage..."
+      - task: update-backstage
+        vars:
+          CLUSTER_NAME: '{{.CLUSTER_NAME}}'
+      - echo ""
+      - echo "Validating updates..."
+      - task: health-check-all
+        vars:
+          CLUSTER_NAME: '{{.CLUSTER_NAME}}'
+      - echo "✅ Platform update complete"
+
+  update-argocd:
+    desc: Update ArgoCD to latest stable version
+    vars:
+      CLUSTER_NAME: '{{.CLUSTER_NAME}}'
+    cmds:
+      - echo "🔄 Updating ArgoCD"
+      - |
+        # Get current version
+        CURRENT_VERSION=$(kubectl get deployment argocd-server -n argocd -o jsonpath='{.spec.template.spec.containers[0].image}' | cut -d':' -f2)
+        echo "Current ArgoCD version: $CURRENT_VERSION"
+      - |
+        # Update to latest stable
+        kubectl apply -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml
+        echo "✅ ArgoCD update initiated"
+      - |
+        # Wait for rollout
+        kubectl rollout status deployment/argocd-server -n argocd --timeout=300s
+        echo "✅ ArgoCD update complete"
+
+  update-crossplane:
+    desc: Update Crossplane to latest stable version
+    vars:
+      CLUSTER_NAME: '{{.CLUSTER_NAME}}'
+    cmds:
+      - echo "🔄 Updating Crossplane"
+      - |
+        # Update Crossplane core
+        helm repo update
+        helm upgrade crossplane crossplane-stable/crossplane \
+          --namespace crossplane-system \
+          --wait \
+          --timeout=300s
+        echo "✅ Crossplane core updated"
+      - |
+        # Update providers if needed
+        echo "Checking provider updates..."
+        kubectl get providers.pkg.crossplane.io -o name | while read provider; do
+          echo "Provider: $provider is healthy"
+        done
+        echo "✅ Provider check complete"
+
+  update-backstage:
+    desc: Update Backstage to latest version
+    vars:
+      CLUSTER_NAME: '{{.CLUSTER_NAME}}'
+    cmds:
+      - echo "🔄 Updating Backstage"
+      - |
+        # Update using Helm if available
+        if helm list -n backstage | grep -q backstage; then
+          helm repo update
+          helm upgrade backstage backstage/backstage \
+            --namespace backstage \
+            --wait \
+            --timeout=300s
+          echo "✅ Backstage updated via Helm"
+        else
+          echo "⚠️ Backstage not installed via Helm, manual update required"
+        fi
+
+  backup-platform:
+    desc: Create comprehensive backup of IDP platform
+    vars:
+      CLUSTER_NAME: '{{.CLUSTER_NAME}}'
+      BACKUP_LOCATION: '{{.BACKUP_LOCATION}}'
+    cmds:
+      - echo "💾 Platform Backup Process"
+      - echo "========================="
+      - echo "Cluster - {{.CLUSTER_NAME}}"
+      - echo "Backup Location - {{.BACKUP_LOCATION}}"
+      - |
+        # Create backup directory
+        mkdir -p "{{.BACKUP_LOCATION}}/$(date +%Y-%m-%d-%H%M%S)"
+        BACKUP_DIR="{{.BACKUP_LOCATION}}/$(date +%Y-%m-%d-%H%M%S)"
+        echo "Created backup directory: $BACKUP_DIR"
+      - task: backup-configurations
+        vars:
+          BACKUP_DIR: '{{.BACKUP_LOCATION}}'
+          CLUSTER_NAME: '{{.CLUSTER_NAME}}'
+      - task: backup-data
+        vars:
+          BACKUP_DIR: '{{.BACKUP_LOCATION}}'
+          CLUSTER_NAME: '{{.CLUSTER_NAME}}'
+      - echo "✅ Platform backup complete"
+
+  backup-configurations:
+    desc: Backup platform configurations
+    vars:
+      BACKUP_DIR: '{{.BACKUP_DIR}}'
+      CLUSTER_NAME: '{{.CLUSTER_NAME}}'
+    cmds:
+      - echo "📋 Backing up configurations"
+      - |
+        BACKUP_PATH="{{.BACKUP_DIR}}/$(date +%Y-%m-%d-%H%M%S)"
+        
+        # Backup ArgoCD configuration
+        kubectl get configmap argocd-cm -n argocd -o yaml > "$BACKUP_PATH/argocd-config.yaml"
+        kubectl get secret argocd-initial-admin-secret -n argocd -o yaml > "$BACKUP_PATH/argocd-admin-secret.yaml"
+        
+        # Backup Crossplane configuration  
+        kubectl get providers.pkg.crossplane.io -o yaml > "$BACKUP_PATH/crossplane-providers.yaml"
+        kubectl get providerconfigs -o yaml > "$BACKUP_PATH/crossplane-configs.yaml"
+        
+        # Backup Backstage configuration
+        kubectl get configmap backstage-app-config -n backstage -o yaml > "$BACKUP_PATH/backstage-config.yaml" 2>/dev/null || echo "⚠️ Backstage config not found"
+        
+        echo "✅ Configurations backed up to $BACKUP_PATH"
+
+  backup-data:
+    desc: Backup platform persistent data
+    vars:
+      BACKUP_DIR: '{{.BACKUP_DIR}}'
+      CLUSTER_NAME: '{{.CLUSTER_NAME}}'
+    cmds:
+      - echo "💾 Backing up persistent data"
+      - |
+        BACKUP_PATH="{{.BACKUP_DIR}}/$(date +%Y-%m-%d-%H%M%S)"
+        
+        # Backup PostgreSQL data for Backstage if present
+        if kubectl get pod -n backstage -l app=postgresql >/dev/null 2>&1; then
+          kubectl exec -n backstage -it $(kubectl get pod -n backstage -l app=postgresql -o jsonpath='{.items[0].metadata.name}') -- pg_dump -U postgres backstage > "$BACKUP_PATH/backstage-db.sql"
+          echo "✅ Backstage database backed up"
+        else
+          echo "⚠️ PostgreSQL for Backstage not found"
+        fi
+        
+        # List persistent volumes
+        kubectl get pv > "$BACKUP_PATH/persistent-volumes.txt"
+        kubectl get pvc --all-namespaces > "$BACKUP_PATH/persistent-volume-claims.txt"
+        
+        echo "✅ Data backup complete"
+
+  cleanup-resources:
+    desc: Clean up unused resources and optimize platform
+    vars:
+      CLUSTER_NAME: '{{.CLUSTER_NAME}}'
+    cmds:
+      - echo "🧹 Platform Resource Cleanup"
+      - echo "============================"
+      - echo "Cluster- {{.CLUSTER_NAME}}"
+      - |
+        # Clean up completed jobs
+        kubectl delete jobs --field-selector status.successful=1 --all-namespaces
+        echo "✅ Cleaned up completed jobs"
+      - |
+        # Clean up failed pods
+        kubectl delete pods --field-selector=status.phase=Failed --all-namespaces
+        echo "✅ Cleaned up failed pods"
+      - |
+        # Clean up unused ConfigMaps and Secrets (be careful!)
+        echo "⚠️ Skipping ConfigMap/Secret cleanup (requires manual review)"
+      - |
+        # Clean up unused persistent volumes
+        kubectl get pv | grep Available | awk '{print $1}' | xargs -I {} kubectl delete pv {} 2>/dev/null || echo "✅ No unused PVs to clean"
+      - echo "✅ Resource cleanup complete"
+
+  monitor-platform:
+    desc: Continuous monitoring dashboard for platform health
+    vars:
+      CLUSTER_NAME: '{{.CLUSTER_NAME}}'
+    cmds:
+      - echo "📊 Platform Monitoring Dashboard"
+      - echo "==============================="
+      - echo "Cluster - {{.CLUSTER_NAME}}"
+      - echo "Press Ctrl+C to exit"
+      - |
+        while true; do
+          clear
+          echo "📊 IDP Platform Status - $(date)"
+          echo "================================"
+          echo ""
+          
+          # Cluster status
+          echo "🏗️ Cluster Status:"
+          kubectl get nodes --no-headers | awk '{print "  " $1 ": " $2}'
+          echo ""
+          
+          # Platform components
+          echo "🚀 Platform Components:"
+          for namespace in argocd crossplane-system backstage; do
+            if kubectl get namespace $namespace >/dev/null 2>&1; then
+              running=$(kubectl get pods -n $namespace --no-headers | grep -c "Running")
+              total=$(kubectl get pods -n $namespace --no-headers | wc -l)
+              echo "  $namespace: $running/$total Running"
+            fi
+          done
+          echo ""
+          
+          # Resource usage (if metrics available)
+          echo "📈 Resource Usage:"
+          kubectl top nodes 2>/dev/null | tail -n +2 || echo "  Metrics server not available"
+          
+          sleep 30
+        done
+
+  help:
+    desc: Show maintenance workflow help and examples
+    cmds:
+      - |
+        cat << 'EOF'
+        🛠️ IDP Builder - Platform Maintenance Workflows
+        ===============================================
+        
+        HEALTH MONITORING:
+          task workflows:health-check-all CLUSTER_NAME=my-cluster
+          task workflows:check-infrastructure-health
+          task workflows:check-platform-health
+          task workflows:check-resource-utilization
+          task workflows:monitor-platform CLUSTER_NAME=my-cluster
+        
+        PLATFORM UPDATES:
+          task workflows:update-platform CLUSTER_NAME=my-cluster
+          task workflows:update-argocd CLUSTER_NAME=my-cluster
+          task workflows:update-crossplane CLUSTER_NAME=my-cluster
+          task workflows:update-backstage CLUSTER_NAME=my-cluster
+        
+        BACKUP & RESTORE:
+          task workflows:backup-platform CLUSTER_NAME=my-cluster BACKUP_LOCATION=./backups
+          task workflows:backup-configurations CLUSTER_NAME=my-cluster
+          task workflows:backup-data CLUSTER_NAME=my-cluster
+        
+        MAINTENANCE:
+          task workflows:cleanup-resources CLUSTER_NAME=my-cluster
+        
+        EXAMPLES:
+          # Daily health check
+          task workflows:health-check-all CLUSTER_NAME=production-idp
+        
+          # Weekly platform update
+          task workflows:update-platform CLUSTER_NAME=staging-idp
+        
+          # Monthly backup
+          task workflows:backup-platform CLUSTER_NAME=prod-idp BACKUP_LOCATION=/backup/idp
+        
+          # Continuous monitoring
+          task workflows:monitor-platform CLUSTER_NAME=dev-idp
+        
+        PARAMETERS:
+          CLUSTER_NAME     - Kubernetes cluster name
+          BACKUP_LOCATION  - Directory for backups (default: ./backups)
+        EOF

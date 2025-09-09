@@ -1,0 +1,520 @@
+version: '3'
+
+# ===============================
+# Crossplane Infrastructure as Code Platform
+# ===============================
+
+vars:
+  # Standardized parameters
+  CLUSTER_NAME: '{{.CLUSTER_NAME | default "idp-cluster"}}'
+  PROVIDER: '{{.PROVIDER | default "kind"}}'
+  ENVIRONMENT: '{{.ENVIRONMENT | default "dev"}}'
+  NAMESPACE: '{{.NAMESPACE | default "crossplane-system"}}'
+  
+  # Crossplane specific configuration
+  CROSSPLANE_VERSION: '{{.CROSSPLANE_VERSION | default "stable"}}'
+  HELM_CHART_VERSION: '{{.HELM_CHART_VERSION | default "1.18.0"}}'
+
+tasks:
+
+  # ===============================
+  # Crossplane Installation
+  # ===============================
+
+  install-crossplane:
+    desc: Install and configure Crossplane Infrastructure as Code platform
+    vars:
+      VERSION: '{{.CROSSPLANE_VERSION}}'
+      NAMESPACE: '{{.NAMESPACE}}'
+    cmds:
+      - echo "🚀 Installing Crossplane for {{.PROVIDER}} cluster {{.CLUSTER_NAME}}"
+      - task: _validate-installation
+      - task: _install-crossplane-core
+      - task: _verify-installation
+      - task: _install-provider-packages
+      - echo "✅ Crossplane installation complete"
+
+  uninstall-crossplane:
+    desc: Uninstall Crossplane platform
+    vars:
+      NAMESPACE: '{{.NAMESPACE}}'
+    cmds:
+      - echo "🗑️ Uninstalling Crossplane from namespace {{.NAMESPACE}}"
+      - task: _confirm-uninstall
+      - task: _cleanup-resources
+      - helm uninstall crossplane -n {{.NAMESPACE}} || echo "Helm release not found"
+      - kubectl delete namespace {{.NAMESPACE}} --ignore-not-found=true
+      - echo "✅ Crossplane uninstalled successfully"
+
+  # ===============================
+  # Provider Management
+  # ===============================
+
+  install-aws-provider:
+    desc: Install AWS provider for Crossplane
+    vars:
+      PROVIDER_VERSION: '{{.PROVIDER_VERSION | default "stable"}}'
+    cmds:
+      - echo "☁️ Installing Crossplane AWS provider"
+      - |
+        cat << EOF | kubectl apply -f -
+        apiVersion: pkg.crossplane.io/v1
+        kind: Provider
+        metadata:
+          name: provider-aws-s3
+        spec:
+          package: xpkg.upbound.io/upbound/provider-aws-s3:{{.PROVIDER_VERSION}}
+        ---
+        apiVersion: pkg.crossplane.io/v1
+        kind: Provider
+        metadata:
+          name: provider-aws-rds
+        spec:
+          package: xpkg.upbound.io/upbound/provider-aws-rds:{{.PROVIDER_VERSION}}
+        ---
+        apiVersion: pkg.crossplane.io/v1
+        kind: Provider
+        metadata:
+          name: provider-aws-ec2
+        spec:
+          package: xpkg.upbound.io/upbound/provider-aws-ec2:{{.PROVIDER_VERSION}}
+        EOF
+      - echo "⏳ Waiting for AWS providers to be healthy"
+      - task: _wait-provider-ready
+        vars:
+          PROVIDER_NAME: "provider-aws-s3"
+      - task: _wait-provider-ready
+        vars:
+          PROVIDER_NAME: "provider-aws-rds"
+      - task: _wait-provider-ready
+        vars:
+          PROVIDER_NAME: "provider-aws-ec2"
+
+  install-azure-provider:
+    desc: Install Azure provider for Crossplane
+    vars:
+      PROVIDER_VERSION: '{{.PROVIDER_VERSION | default "stable"}}'
+    cmds:
+      - echo "☁️ Installing Crossplane Azure provider"
+      - |
+        cat << EOF | kubectl apply -f -
+        apiVersion: pkg.crossplane.io/v1
+        kind: Provider
+        metadata:
+          name: provider-azure-storage
+        spec:
+          package: xpkg.upbound.io/upbound/provider-azure-storage:{{.PROVIDER_VERSION}}
+        ---
+        apiVersion: pkg.crossplane.io/v1
+        kind: Provider
+        metadata:
+          name: provider-azure-sql
+        spec:
+          package: xpkg.upbound.io/upbound/provider-azure-sql:{{.PROVIDER_VERSION}}
+        EOF
+      - echo "⏳ Waiting for Azure providers to be healthy"
+      - task: _wait-provider-ready
+        vars:
+          PROVIDER_NAME: "provider-azure-storage"
+      - task: _wait-provider-ready
+        vars:
+          PROVIDER_NAME: "provider-azure-sql"
+
+  install-gcp-provider:
+    desc: Install GCP provider for Crossplane
+    vars:
+      PROVIDER_VERSION: '{{.PROVIDER_VERSION | default "stable"}}'
+    cmds:
+      - echo "☁️ Installing Crossplane GCP provider"
+      - |
+        cat << EOF | kubectl apply -f -
+        apiVersion: pkg.crossplane.io/v1
+        kind: Provider
+        metadata:
+          name: provider-gcp-storage
+        spec:
+          package: xpkg.upbound.io/upbound/provider-gcp-storage:{{.PROVIDER_VERSION}}
+        ---
+        apiVersion: pkg.crossplane.io/v1
+        kind: Provider
+        metadata:
+          name: provider-gcp-sql
+        spec:
+          package: xpkg.upbound.io/upbound/provider-gcp-sql:{{.PROVIDER_VERSION}}
+        EOF
+      - echo "⏳ Waiting for GCP providers to be healthy"
+      - task: _wait-provider-ready
+        vars:
+          PROVIDER_NAME: "provider-gcp-storage"
+      - task: _wait-provider-ready
+        vars:
+          PROVIDER_NAME: "provider-gcp-sql"
+
+  # ===============================
+  # Configuration Management
+  # ===============================
+
+  create-provider-config:
+    desc: Create provider configuration for cloud authentication
+    vars:
+      PROVIDER_TYPE: '{{.PROVIDER_TYPE | default .PROVIDER}}'
+      CONFIG_NAME: '{{.CONFIG_NAME | default "default"}}'
+      SECRET_NAME: '{{.SECRET_NAME}}'
+    cmds:
+      - echo "🔧 Creating {{.PROVIDER_TYPE}} provider configuration"
+      - task: _create-{{.PROVIDER_TYPE}}-config
+        vars:
+          CONFIG_NAME: '{{.CONFIG_NAME}}'
+          SECRET_NAME: '{{.SECRET_NAME}}'
+
+  list-providers:
+    desc: List all installed Crossplane providers
+    cmds:
+      - echo "📦 Installed Crossplane Providers"
+      - echo "=================================="
+      - kubectl get providers -o custom-columns="NAME:.metadata.name,INSTALLED:.status.conditions[?(@.type==\"Installed\")].status,HEALTHY:.status.conditions[?(@.type==\"Healthy\")].status,PACKAGE:.spec.package"
+
+  list-compositions:
+    desc: List all Crossplane compositions
+    cmds:
+      - echo "🏗️ Crossplane Compositions"
+      - echo "=========================="
+      - kubectl get compositions -o custom-columns="NAME:.metadata.name,XRD:.spec.compositeTypeRef.apiVersion,KIND:.spec.compositeTypeRef.kind"
+
+  # ===============================
+  # Resource Management
+  # ===============================
+
+  create-example-bucket:
+    desc: Create example S3 bucket using Crossplane
+    vars:
+      BUCKET_NAME: '{{.BUCKET_NAME | default "crossplane-example-bucket"}}'
+      REGION: '{{.REGION | default "ap-southeast-1"}}'
+    cmds:
+      - echo "🪣 Creating S3 bucket {{.BUCKET_NAME}} in {{.REGION}}"
+      - |
+        cat << EOF | kubectl apply -f -
+        apiVersion: s3.aws.upbound.io/v1beta1
+        kind: Bucket
+        metadata:
+          name: {{.BUCKET_NAME}}
+        spec:
+          forProvider:
+            region: {{.REGION}}
+          providerConfigRef:
+            name: default
+        EOF
+
+  create-example-database:
+    desc: Create example RDS database using Crossplane
+    vars:
+      DB_NAME: '{{.DB_NAME | default "crossplane-example-db"}}'
+      DB_CLASS: '{{.DB_CLASS | default "db.t3.micro"}}'
+      REGION: '{{.REGION | default "ap-southeast-1"}}'
+    cmds:
+      - echo "🗄️ Creating RDS database {{.DB_NAME}} in {{.REGION}}"
+      - |
+        cat << EOF | kubectl apply -f -
+        apiVersion: rds.aws.upbound.io/v1beta1
+        kind: Instance
+        metadata:
+          name: {{.DB_NAME}}
+        spec:
+          forProvider:
+            region: {{.REGION}}
+            dbName: {{.DB_NAME}}
+            instanceClass: {{.DB_CLASS}}
+            engine: postgres
+            engineVersion: "13.7"
+            allocatedStorage: 20
+            autoMinorVersionUpgrade: true
+            username: adminuser
+            manageMasterUserPassword: true
+            skipFinalSnapshot: true
+          providerConfigRef:
+            name: default
+        EOF
+
+  list-managed-resources:
+    desc: List all Crossplane managed resources
+    vars:
+      RESOURCE_TYPE: '{{.RESOURCE_TYPE | default ""}}'
+    cmds:
+      - echo "📋 Crossplane Managed Resources"
+      - echo "==============================="
+      - |
+        if [ -n "{{.RESOURCE_TYPE}}" ]; then
+          kubectl get {{.RESOURCE_TYPE}} -o wide
+        else
+          echo "🪣 S3 Buckets"
+          kubectl get buckets -o custom-columns="NAME:.metadata.name,READY:.status.conditions[?(@.type==\"Ready\")].status,SYNCED:.status.conditions[?(@.type==\"Synced\")].status" 2>/dev/null || echo "No S3 buckets found"
+          echo ""
+          echo "🗄️ RDS Instances"  
+          kubectl get instances -o custom-columns="NAME:.metadata.name,READY:.status.conditions[?(@.type==\"Ready\")].status,SYNCED:.status.conditions[?(@.type==\"Synced\")].status" 2>/dev/null || echo "No RDS instances found"
+        fi
+
+  # ===============================
+  # Status and Health Checks
+  # ===============================
+
+  status:
+    desc: Show Crossplane status and health
+    vars:
+      NAMESPACE: '{{.NAMESPACE}}'
+    cmds:
+      - echo "📊 Crossplane Status in {{.NAMESPACE}}"
+      - echo "====================================="
+      - echo ""
+      - echo "🏃 Pods Status"
+      - kubectl get pods -n {{.NAMESPACE}} -o wide
+      - echo ""
+      - echo "📦 Providers Status"
+      - task: list-providers
+      - echo ""
+      - echo "🏗️ Compositions"
+      - task: list-compositions
+      - echo ""
+      - echo "📋 Managed Resources"
+      - task: list-managed-resources
+
+  health-check:
+    desc: Comprehensive Crossplane health check
+    vars:
+      NAMESPACE: '{{.NAMESPACE}}'
+    cmds:
+      - echo "🏥 Crossplane Health Check"
+      - echo "=========================="
+      - echo ""
+      - |
+        # Check namespace
+        if kubectl get namespace {{.NAMESPACE}} >/dev/null 2>&1; then
+          echo "✅ Namespace {{.NAMESPACE}} exists"
+        else
+          echo "❌ Namespace {{.NAMESPACE}} not found"
+          exit 1
+        fi
+        
+        # Check core components
+        COMPONENTS=("crossplane" "crossplane-rbac-manager")
+        for component in "${COMPONENTS[@]}"; do
+          if kubectl get deployment $component -n {{.NAMESPACE}} >/dev/null 2>&1; then
+            READY=$(kubectl get deployment $component -n {{.NAMESPACE}} -o jsonpath='{.status.readyReplicas}')
+            DESIRED=$(kubectl get deployment $component -n {{.NAMESPACE}} -o jsonpath='{.spec.replicas}')
+            if [ "$READY" = "$DESIRED" ]; then
+              echo "✅ $component ($READY/$DESIRED ready)"
+            else
+              echo "❌ $component ($READY/$DESIRED ready)"
+            fi
+          else
+            echo "❌ $component not found"
+          fi
+        done
+        
+        # Check providers
+        echo ""
+        echo "📦 Provider Health"
+        PROVIDERS=$(kubectl get providers -o jsonpath='{.items[*].metadata.name}')
+        for provider in $PROVIDERS; do
+          HEALTHY=$(kubectl get provider $provider -o jsonpath='{.status.conditions[?(@.type=="Healthy")].status}')
+          if [ "$HEALTHY" = "True" ]; then
+            echo "✅ $provider"
+          else
+            echo "❌ $provider"
+          fi
+        done
+
+  # ===============================
+  # Internal Helper Tasks
+  # ===============================
+
+  _validate-installation:
+    internal: true
+    cmds:
+      - echo "🔍 Validating Crossplane installation prerequisites"
+      - |
+        # Check if kubectl is available
+        if ! command -v kubectl >/dev/null 2>&1; then
+          echo "❌ kubectl is required but not installed"
+          exit 1
+        fi
+        
+        # Check if helm is available
+        if ! command -v helm >/dev/null 2>&1; then
+          echo "❌ helm is required but not installed"
+          exit 1
+        fi
+        
+        # Check cluster connectivity
+        if ! kubectl cluster-info >/dev/null 2>&1; then
+          echo "❌ Cannot connect to Kubernetes cluster"
+          exit 1
+        fi
+        
+        echo "✅ Prerequisites validated"
+
+  _install-crossplane-core:
+    internal: true
+    vars:
+      NAMESPACE: '{{.NAMESPACE}}'
+      CHART_VERSION: '{{.HELM_CHART_VERSION}}'
+    cmds:
+      - echo "⚙️ Installing Crossplane core components"
+      - |
+        # Add Crossplane Helm repository
+        helm repo add crossplane-stable https://charts.crossplane.io/stable
+        helm repo update
+        
+        # Create namespace
+        kubectl create namespace {{.NAMESPACE}} --dry-run=client -o yaml | kubectl apply -f -
+        
+        # Install Crossplane
+        helm upgrade --install crossplane \
+          crossplane-stable/crossplane \
+          --namespace {{.NAMESPACE}} \
+          --version {{.CHART_VERSION}} \
+          --wait
+
+  _install-provider-packages:
+    internal: true
+    cmds:
+      - echo "📦 Installing provider packages based on cluster provider {{.PROVIDER}}"
+      - |
+        case "{{.PROVIDER}}" in
+          "aws")
+            echo "Installing AWS providers"
+            task: install-aws-provider
+            ;;
+          "azure")
+            echo "Installing Azure providers"
+            task: install-azure-provider
+            ;;
+          "gcp")
+            echo "Installing GCP providers"
+            task: install-gcp-provider
+            ;;
+          "kind")
+            echo "⏭️ Skipping cloud provider installation for local kind cluster"
+            ;;
+          *)
+            echo "⚠️ Unknown provider {{.PROVIDER}}, skipping provider package installation"
+            ;;
+        esac
+
+  _wait-provider-ready:
+    internal: true
+    vars:
+      PROVIDER_NAME: '{{.PROVIDER_NAME}}'
+      TIMEOUT: '{{.TIMEOUT | default "300"}}'
+    cmds:
+      - |
+        echo "⏳ Waiting for provider {{.PROVIDER_NAME}} to be ready"
+        kubectl wait --for=condition=Healthy --timeout={{.TIMEOUT}}s provider/{{.PROVIDER_NAME}}
+        kubectl wait --for=condition=Installed --timeout={{.TIMEOUT}}s provider/{{.PROVIDER_NAME}}
+        echo "✅ Provider {{.PROVIDER_NAME}} is ready"
+
+  _create-aws-config:
+    internal: true
+    vars:
+      CONFIG_NAME: '{{.CONFIG_NAME}}'
+      SECRET_NAME: '{{.SECRET_NAME}}'
+    cmds:
+      - |
+        cat << EOF | kubectl apply -f -
+        apiVersion: aws.upbound.io/v1beta1
+        kind: ProviderConfig
+        metadata:
+          name: {{.CONFIG_NAME}}
+        spec:
+          credentials:
+            source: Secret
+            secretRef:
+              namespace: crossplane-system
+              name: {{.SECRET_NAME}}
+              key: creds
+        EOF
+
+  _create-azure-config:
+    internal: true
+    vars:
+      CONFIG_NAME: '{{.CONFIG_NAME}}'
+      SECRET_NAME: '{{.SECRET_NAME}}'
+    cmds:
+      - |
+        cat << EOF | kubectl apply -f -
+        apiVersion: azure.upbound.io/v1beta1
+        kind: ProviderConfig
+        metadata:
+          name: {{.CONFIG_NAME}}
+        spec:
+          credentials:
+            source: Secret
+            secretRef:
+              namespace: crossplane-system
+              name: {{.SECRET_NAME}}
+              key: creds
+        EOF
+
+  _create-gcp-config:
+    internal: true
+    vars:
+      CONFIG_NAME: '{{.CONFIG_NAME}}'
+      SECRET_NAME: '{{.SECRET_NAME}}'
+    cmds:
+      - |
+        cat << EOF | kubectl apply -f -
+        apiVersion: gcp.upbound.io/v1beta1
+        kind: ProviderConfig
+        metadata:
+          name: {{.CONFIG_NAME}}
+        spec:
+          projectID: "your-project-id"
+          credentials:
+            source: Secret
+            secretRef:
+              namespace: crossplane-system
+              name: {{.SECRET_NAME}}
+              key: creds
+        EOF
+
+  _verify-installation:
+    internal: true
+    vars:
+      NAMESPACE: '{{.NAMESPACE}}'
+    cmds:
+      - echo "✅ Verifying Crossplane installation"
+      - |
+        # Wait for all components to be ready
+        kubectl wait --for=condition=ready pod -l app=crossplane -n {{.NAMESPACE}} --timeout=300s
+        echo "✅ All Crossplane components are ready"
+
+  _cleanup-resources:
+    internal: true
+    cmds:
+      - echo "🧹 Cleaning up Crossplane managed resources"
+      - |
+        # Delete all managed resources
+        kubectl delete buckets --all --timeout=60s || echo "No S3 buckets to delete"
+        kubectl delete instances --all --timeout=60s || echo "No RDS instances to delete" 
+        
+        # Delete providers
+        kubectl delete providers --all --timeout=60s || echo "No providers to delete"
+        
+        # Delete provider configs
+        kubectl delete providerconfigs --all --timeout=60s || echo "No provider configs to delete"
+
+  _confirm-uninstall:
+    internal: true
+    vars:
+      NAMESPACE: '{{.NAMESPACE}}'
+    cmds:
+      - |
+        echo "⚠️ WARNING This will delete all Crossplane resources in namespace {{.NAMESPACE}}"
+        echo "This includes all managed infrastructure resources (S3 buckets, RDS instances, etc.)"
+        echo "This action cannot be undone."
+        echo ""
+        read -p "Are you sure you want to continue? (y/N) " -n 1 -r
+        echo ""
+        if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+          echo "❌ Operation cancelled"
+          exit 1
+        fi

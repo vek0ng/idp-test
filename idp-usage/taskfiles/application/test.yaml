@@ -1,0 +1,386 @@
+version: '3'
+
+# ===============================
+# Application Testing Management
+# ===============================
+
+vars:
+  # Standardized parameters
+  APP_NAME: '{{.APP_NAME | default "sample-go-app"}}'
+  ENVIRONMENT: '{{.ENVIRONMENT | default "dev"}}'
+  NAMESPACE: '{{.NAMESPACE | default "default"}}'
+  
+  # Test configuration
+  TEST_TIMEOUT: '{{.TEST_TIMEOUT | default "300s"}}'
+  TEST_PARALLEL: '{{.TEST_PARALLEL | default "4"}}'
+
+tasks:
+
+  # ===============================
+  # Unit and Integration Tests
+  # ===============================
+
+  test:
+    desc: Run all tests for the application
+    vars:
+      APP_NAME: '{{.APP_NAME}}'
+    cmds:
+      - echo "🧪 Running tests for {{.APP_NAME}}"
+      - task: _validate-test-requirements
+        vars:
+          APP_NAME: '{{.APP_NAME}}'
+      - task: unit-test
+        vars:
+          APP_NAME: '{{.APP_NAME}}'
+      - task: integration-test
+        vars:
+          APP_NAME: '{{.APP_NAME}}'
+      - echo "✅ All tests passed for {{.APP_NAME}}"
+
+  unit-test:
+    desc: Run unit tests
+    vars:
+      APP_NAME: '{{.APP_NAME}}'
+    cmds:
+      - echo "🔬 Running unit tests for {{.APP_NAME}}"
+      - |
+        cd apps/{{.APP_NAME}}
+        if [ -f "go.mod" ]; then
+          # Go tests
+          go test -v -race -timeout={{.TEST_TIMEOUT}} ./...
+        elif [ -f "package.json" ]; then
+          # Node.js tests
+          npm test
+        elif [ -f "requirements.txt" ] || [ -f "pyproject.toml" ]; then
+          # Python tests
+          python -m pytest -v
+        else
+          echo "⚠️ No recognized test framework found for {{.APP_NAME}}"
+        fi
+
+  integration-test:
+    desc: Run integration tests
+    vars:
+      APP_NAME: '{{.APP_NAME}}'
+    cmds:
+      - echo "🔗 Running integration tests for {{.APP_NAME}}"
+      - task: _run-integration-tests
+        vars:
+          APP_NAME: '{{.APP_NAME}}'
+
+  # ===============================
+  # Container and Deployment Tests
+  # ===============================
+
+  test-container:
+    desc: Test application container functionality
+    vars:
+      APP_NAME: '{{.APP_NAME}}'
+      IMAGE_TAG: '{{.IMAGE_TAG | default "test"}}'
+      TEST_PORT: '{{.TEST_PORT | default "8080"}}'
+    cmds:
+      - echo "🐳 Testing container for {{.APP_NAME}}"
+      - task: _test-container-build
+        vars:
+          APP_NAME: '{{.APP_NAME}}'
+          IMAGE_TAG: '{{.IMAGE_TAG}}'
+      - task: _test-container-run
+        vars:
+          APP_NAME: '{{.APP_NAME}}'
+          IMAGE_TAG: '{{.IMAGE_TAG}}'
+          TEST_PORT: '{{.TEST_PORT}}'
+      - echo "✅ Container tests passed"
+
+  test-deployment:
+    desc: Test Kubernetes deployment
+    vars:
+      APP_NAME: '{{.APP_NAME}}'
+      NAMESPACE: '{{.NAMESPACE | default (printf "%s-test" .APP_NAME)}}'
+    cmds:
+      - echo "☸️ Testing Kubernetes deployment for {{.APP_NAME}}"
+      - task: _test-k8s-deployment
+        vars:
+          APP_NAME: '{{.APP_NAME}}'
+          NAMESPACE: '{{.NAMESPACE}}'
+      - echo "✅ Deployment tests passed"
+
+  # ===============================
+  # Load and Performance Tests
+  # ===============================
+
+  load-test:
+    desc: Run load tests against deployed application
+    vars:
+      APP_NAME: '{{.APP_NAME}}'
+      NAMESPACE: '{{.NAMESPACE}}'
+      TARGET_URL: '{{.TARGET_URL}}'
+      DURATION: '{{.DURATION | default "30s"}}'
+      CONNECTIONS: '{{.CONNECTIONS | default "10"}}'
+    cmds:
+      - echo "⚡ Running load test for {{.APP_NAME}}"
+      - task: _run-load-test
+        vars:
+          APP_NAME: '{{.APP_NAME}}'
+          NAMESPACE: '{{.NAMESPACE}}'
+          TARGET_URL: '{{.TARGET_URL}}'
+          DURATION: '{{.DURATION}}'
+          CONNECTIONS: '{{.CONNECTIONS}}'
+
+  benchmark:
+    desc: Run performance benchmarks
+    vars:
+      APP_NAME: '{{.APP_NAME}}'
+    cmds:
+      - echo "🏁 Running benchmarks for {{.APP_NAME}}"
+      - |
+        cd apps/{{.APP_NAME}}
+        if [ -f "go.mod" ]; then
+          # Go benchmarks
+          go test -bench=. -benchmem -timeout={{.TEST_TIMEOUT}} ./...
+        else
+          echo "⚠️ Benchmarks not supported for this application type"
+        fi
+
+  # ===============================
+  # Security and Quality Tests
+  # ===============================
+
+  security-test:
+    desc: Run security tests and vulnerability scanning
+    vars:
+      APP_NAME: '{{.APP_NAME}}'
+      IMAGE_TAG: '{{.IMAGE_TAG | default "latest"}}'
+    cmds:
+      - echo "🔒 Running security tests for {{.APP_NAME}}"
+      - task: _security-scan
+        vars:
+          APP_NAME: '{{.APP_NAME}}'
+          IMAGE_TAG: '{{.IMAGE_TAG}}'
+
+  lint:
+    desc: Run code linting and static analysis
+    vars:
+      APP_NAME: '{{.APP_NAME}}'
+    cmds:
+      - echo "🔍 Running linting for {{.APP_NAME}}"
+      - |
+        cd apps/{{.APP_NAME}}
+        if [ -f "go.mod" ]; then
+          # Go linting
+          if command -v golangci-lint >/dev/null 2>&1; then
+            golangci-lint run
+          else
+            go vet ./...
+            go fmt ./...
+          fi
+        elif [ -f "package.json" ]; then
+          # Node.js linting
+          npm run lint || echo "No lint script found"
+        elif [ -f "requirements.txt" ] || [ -f "pyproject.toml" ]; then
+          # Python linting
+          if command -v flake8 >/dev/null 2>&1; then
+            flake8 .
+          else
+            echo "flake8 not installed"
+          fi
+        fi
+
+  # ===============================
+  # Test Reporting and Coverage
+  # ===============================
+
+  test-coverage:
+    desc: Generate test coverage report
+    vars:
+      APP_NAME: '{{.APP_NAME}}'
+    cmds:
+      - echo "📊 Generating test coverage for {{.APP_NAME}}"
+      - |
+        cd apps/{{.APP_NAME}}
+        if [ -f "go.mod" ]; then
+          # Go coverage
+          go test -coverprofile=coverage.out ./...
+          go tool cover -html=coverage.out -o coverage.html
+          echo "Coverage report generated coverage.html"
+        else
+          echo "⚠️ Coverage not supported for this application type"
+        fi
+
+  test-report:
+    desc: Generate comprehensive test report
+    vars:
+      APP_NAME: '{{.APP_NAME}}'
+    cmds:
+      - echo "📋 Generating test report for {{.APP_NAME}}"
+      - |
+        echo "Test Report for {{.APP_NAME}}" > test-report.txt
+        echo "=========================" >> test-report.txt
+        echo "Generated: $(date)" >> test-report.txt
+        echo "" >> test-report.txt
+        
+        # Run tests and capture output
+        echo "Unit Tests:" >> test-report.txt
+        task unit-test APP_NAME={{.APP_NAME}} >> test-report.txt 2>&1 || echo "Unit tests failed" >> test-report.txt
+        
+        echo "" >> test-report.txt
+        echo "Linting:" >> test-report.txt
+        task lint APP_NAME={{.APP_NAME}} >> test-report.txt 2>&1 || echo "Linting issues found" >> test-report.txt
+        
+        echo "✅ Test report generated test-report.txt"
+
+  # ===============================
+  # Test Cleanup and Utilities
+  # ===============================
+
+  clean-test:
+    desc: Clean test artifacts and temporary files
+    vars:
+      APP_NAME: '{{.APP_NAME}}'
+    cmds:
+      - echo "🧹 Cleaning test artifacts for {{.APP_NAME}}"
+      - |
+        cd apps/{{.APP_NAME}} 2>/dev/null || exit 0
+        
+        # Remove test artifacts
+        rm -f coverage.out coverage.html
+        rm -f test-report.txt
+        rm -rf test-results/
+        
+        # Stop and remove test containers
+        docker ps -q --filter "name=test-{{.APP_NAME}}" | xargs -r docker stop
+        docker ps -aq --filter "name=test-{{.APP_NAME}}" | xargs -r docker rm
+        
+        echo "✅ Test cleanup complete"
+
+  # ===============================
+  # Internal Helper Tasks
+  # ===============================
+
+  _validate-test-requirements:
+    internal: true
+    vars:
+      APP_NAME: '{{.APP_NAME}}'
+    cmds:
+      - |
+        # Check if app directory exists
+        if [ ! -d "apps/{{.APP_NAME}}" ]; then
+          echo "❌ Application directory not found apps/{{.APP_NAME}}"
+          exit 1
+        fi
+        
+        echo "✅ Test requirements validated"
+
+  _run-integration-tests:
+    internal: true
+    vars:
+      APP_NAME: '{{.APP_NAME}}'
+    cmds:
+      - |
+        cd apps/{{.APP_NAME}}
+        
+        # Check for integration test files or scripts
+        if [ -f "integration_test.go" ]; then
+          go test -v -tags=integration ./...
+        elif [ -f "test/integration.js" ]; then
+          npm run test:integration || echo "No integration test script"
+        elif [ -f "tests/test_integration.py" ]; then
+          python -m pytest tests/test_integration.py -v
+        else
+          echo "ℹ️ No integration tests found for {{.APP_NAME}}"
+        fi
+
+  _test-container-build:
+    internal: true
+    vars:
+      APP_NAME: '{{.APP_NAME}}'
+      IMAGE_TAG: '{{.IMAGE_TAG}}'
+    cmds:
+      - |
+        cd apps/{{.APP_NAME}}
+        docker build -t {{.APP_NAME}}:{{.IMAGE_TAG}} .
+
+  _test-container-run:
+    internal: true
+    vars:
+      APP_NAME: '{{.APP_NAME}}'
+      IMAGE_TAG: '{{.IMAGE_TAG}}'
+      TEST_PORT: '{{.TEST_PORT}}'
+    cmds:
+      - |
+        # Start container
+        CONTAINER_ID=$(docker run -d -p {{.TEST_PORT}}:8080 --name test-{{.APP_NAME}} {{.APP_NAME}}:{{.IMAGE_TAG}})
+        
+        # Wait for container to be ready
+        sleep 5
+        
+        # Test container response
+        if curl -f http://localhost:{{.TEST_PORT}} >/dev/null 2>&1; then
+          echo "✅ Container responding on port {{.TEST_PORT}}"
+        else
+          echo "❌ Container not responding"
+          docker logs test-{{.APP_NAME}}
+          exit 1
+        fi
+        
+        # Cleanup
+        docker stop test-{{.APP_NAME}} >/dev/null
+        docker rm test-{{.APP_NAME}} >/dev/null
+
+  _test-k8s-deployment:
+    internal: true
+    vars:
+      APP_NAME: '{{.APP_NAME}}'
+      NAMESPACE: '{{.NAMESPACE}}'
+    cmds:
+      - |
+        # Create test namespace
+        kubectl create namespace {{.NAMESPACE}} --dry-run=client -o yaml | kubectl apply -f -
+        
+        # Deploy application
+        kubectl apply -f apps/{{.APP_NAME}}/k8s/ -n {{.NAMESPACE}}
+        
+        # Wait for deployment
+        kubectl wait --for=condition=available --timeout=300s deployment/{{.APP_NAME}} -n {{.NAMESPACE}}
+        
+        # Test service connectivity
+        kubectl run test-pod --image=busybox --rm -i --restart=Never -n {{.NAMESPACE}} -- wget -qO- {{.APP_NAME}}-service
+        
+        # Cleanup
+        kubectl delete namespace {{.NAMESPACE}} --timeout=60s
+
+  _run-load-test:
+    internal: true
+    vars:
+      APP_NAME: '{{.APP_NAME}}'
+      NAMESPACE: '{{.NAMESPACE}}'
+      TARGET_URL: '{{.TARGET_URL}}'
+      DURATION: '{{.DURATION}}'
+      CONNECTIONS: '{{.CONNECTIONS}}'
+    cmds:
+      - |
+        # Use wrk if available, otherwise use basic curl loop
+        if command -v wrk >/dev/null 2>&1; then
+          wrk -t{{.CONNECTIONS}} -c{{.CONNECTIONS}} -d{{.DURATION}} {{.TARGET_URL}}
+        else
+          echo "Running basic load test (wrk not available)"
+          for i in $(seq 1 100); do
+            curl -s {{.TARGET_URL}} >/dev/null &
+          done
+          wait
+        fi
+
+  _security-scan:
+    internal: true
+    vars:
+      APP_NAME: '{{.APP_NAME}}'
+      IMAGE_TAG: '{{.IMAGE_TAG}}'
+    cmds:
+      - |
+        echo "🔍 Scanning {{.APP_NAME}}:{{.IMAGE_TAG}} for vulnerabilities"
+        
+        # Use trivy if available
+        if command -v trivy >/dev/null 2>&1; then
+          trivy image {{.APP_NAME}}:{{.IMAGE_TAG}}
+        else
+          echo "⚠️ Trivy not installed, skipping vulnerability scan"
+        fi

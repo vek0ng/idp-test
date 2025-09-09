@@ -1,0 +1,90 @@
+version: '3'
+
+# IDP Builder - Unified Workflow Integration
+# Provides access to all workflow components
+
+includes:
+  setup: ./setup.yaml
+  maintenance: ./maintenance.yaml
+  disaster-recovery: ./disaster-recovery.yaml
+
+tasks:
+  help:
+    desc: Show workflow integration help and examples
+    cmds:
+      - |
+        cat << 'EOF'
+        🏗️ IDP Builder - Workflow Integration
+        ====================================
+        
+        PLATFORM SETUP WORKFLOWS:
+          task workflows:complete-setup CLUSTER_NAME=my-cluster PROVIDER=aws
+          task workflows:setup-prerequisites
+          task workflows:setup-infrastructure CLUSTER_NAME=my-cluster
+          task workflows:install-platform-stack
+        
+        MAINTENANCE WORKFLOWS:
+          task workflows:health-check CLUSTER_NAME=my-cluster
+          task workflows:update-platform CLUSTER_NAME=my-cluster
+          task workflows:backup-platform CLUSTER_NAME=my-cluster
+          task workflows:cleanup-resources CLUSTER_NAME=my-cluster
+        
+        DISASTER RECOVERY WORKFLOWS:
+          task workflows:backup-all CLUSTER_NAME=my-cluster
+          task workflows:restore-all CLUSTER_NAME=my-cluster BACKUP_DATE=2024-01-01
+          task workflows:disaster-recovery CLUSTER_NAME=my-cluster
+        
+        WORKFLOW COMPONENTS:
+          Setup:           Complete platform setup from prerequisites to platform stack
+          Maintenance:     Ongoing operations, health monitoring, updates, cleanup
+          Disaster Recovery: Backup, restore, and disaster recovery capabilities
+        
+        EXAMPLES:
+          # Complete platform setup on AWS
+          task workflows:complete-setup CLUSTER_NAME=prod-aws PROVIDER=aws REGION=us-west-2
+        
+          # Daily maintenance tasks
+          task workflows:health-check CLUSTER_NAME=prod-aws
+          task workflows:update-platform CLUSTER_NAME=prod-aws
+        
+          # Backup before major changes
+          task workflows:backup-all CLUSTER_NAME=prod-aws
+        
+          # Disaster recovery restoration
+          task workflows:restore-all CLUSTER_NAME=prod-aws BACKUP_DATE=2024-12-01
+        
+        📋 Use 'task workflows:WORKFLOW_NAME:help' for detailed workflow help
+        EOF
+
+  # Quick access to main workflows
+  complete-setup:
+    desc: Complete IDP platform setup from scratch
+    cmds:
+      - task: setup:complete-setup
+        vars:
+          CLUSTER_NAME: '{{.CLUSTER_NAME}}'
+          PROVIDER: '{{.PROVIDER}}'
+          ENVIRONMENT: '{{.ENVIRONMENT}}'
+          REGION: '{{.REGION}}'
+
+  health-check:
+    desc: Comprehensive platform health check
+    cmds:
+      - task: maintenance:health-check
+        vars:
+          CLUSTER_NAME: '{{.CLUSTER_NAME}}'
+
+  backup-all:
+    desc: Create comprehensive platform backup
+    cmds:
+      - task: disaster-recovery:backup-all
+        vars:
+          CLUSTER_NAME: '{{.CLUSTER_NAME}}'
+
+  restore-all:
+    desc: Restore platform from backup
+    cmds:
+      - task: disaster-recovery:restore-all
+        vars:
+          CLUSTER_NAME: '{{.CLUSTER_NAME}}'
+          BACKUP_DATE: '{{.BACKUP_DATE}}'

@@ -1,0 +1,224 @@
+version: '3'
+
+# ===============================
+# Application Build Management
+# ===============================
+
+vars:
+  # Standardized parameters
+  APP_NAME: '{{.APP_NAME | default "sample-go-app"}}'
+  ENVIRONMENT: '{{.ENVIRONMENT | default "dev"}}'
+  REGISTRY: '{{.REGISTRY | default "localhost:5000"}}'
+  IMAGE_TAG: '{{.IMAGE_TAG | default "latest"}}'
+  
+  # Build configuration
+  DOCKERFILE: '{{.DOCKERFILE | default "Dockerfile"}}'
+  BUILD_CONTEXT: '{{.BUILD_CONTEXT | default "."}}'
+  PLATFORM: '{{.PLATFORM | default "linux/amd64"}}'
+
+tasks:
+
+  # ===============================
+  # Application Build Tasks
+  # ===============================
+
+  build:
+    desc: Build application container image
+    vars:
+      APP_NAME: '{{.APP_NAME}}'
+      IMAGE_TAG: '{{.IMAGE_TAG}}'
+      DOCKERFILE: '{{.DOCKERFILE}}'
+      BUILD_CONTEXT: '{{.BUILD_CONTEXT}}'
+      PLATFORM: '{{.PLATFORM}}'
+    cmds:
+      - echo "🏗️ Building {{.APP_NAME}} container image"
+      - task: _validate-build-requirements
+        vars:
+          APP_NAME: '{{.APP_NAME}}'
+      - task: _build-container-image
+        vars:
+          APP_NAME: '{{.APP_NAME}}'
+          IMAGE_TAG: '{{.IMAGE_TAG}}'
+          DOCKERFILE: '{{.DOCKERFILE}}'
+          BUILD_CONTEXT: '{{.BUILD_CONTEXT}}'
+          PLATFORM: '{{.PLATFORM}}'
+      - echo "✅ Build complete {{.APP_NAME}}:{{.IMAGE_TAG}}"
+
+  build-push:
+    desc: Build and push application container image to registry
+    vars:
+      APP_NAME: '{{.APP_NAME}}'
+      REGISTRY: '{{.REGISTRY}}'
+      IMAGE_TAG: '{{.IMAGE_TAG}}'
+    cmds:
+      - echo "🚀 Building and pushing {{.APP_NAME}} to {{.REGISTRY}}"
+      - task: build
+        vars:
+          APP_NAME: '{{.APP_NAME}}'
+          IMAGE_TAG: '{{.IMAGE_TAG}}'
+      - task: _push-image
+        vars:
+          APP_NAME: '{{.APP_NAME}}'
+          REGISTRY: '{{.REGISTRY}}'
+          IMAGE_TAG: '{{.IMAGE_TAG}}'
+      - echo "✅ Push complete {{.REGISTRY}}/{{.APP_NAME}}:{{.IMAGE_TAG}}"
+
+  # ===============================
+  # Multi-Application Build
+  # ===============================
+
+  build-all:
+    desc: Build all applications in the apps directory
+    cmds:
+      - echo "🏗️ Building all applications"
+      - task: _discover-and-build-apps
+
+  clean:
+    desc: Clean build artifacts and Docker images
+    vars:
+      APP_NAME: '{{.APP_NAME}}'
+    cmds:
+      - echo "🧹 Cleaning build artifacts for {{.APP_NAME}}"
+      - |
+        # Remove Docker images
+        docker rmi {{.APP_NAME}}:{{.IMAGE_TAG}} 2>/dev/null || echo "Image {{.APP_NAME}}:{{.IMAGE_TAG}} not found"
+        
+        # Clean Docker build cache
+        docker builder prune -f
+        
+        echo "✅ Clean complete"
+
+  # ===============================
+  # Build Information and Status
+  # ===============================
+
+  list-images:
+    desc: List built application images
+    cmds:
+      - echo "📦 Application Images"
+      - echo "===================="
+      - docker images --filter "reference=*/*" --format "table {{.Repository}}\t{{.Tag}}\t{{.Size}}\t{{.CreatedAt}}"
+
+  image-info:
+    desc: Show detailed information about application image
+    vars:
+      APP_NAME: '{{.APP_NAME}}'
+      IMAGE_TAG: '{{.IMAGE_TAG}}'
+    cmds:
+      - echo "ℹ️ Image Information for {{.APP_NAME}}:{{.IMAGE_TAG}}"
+      - echo "=============================================="
+      - |
+        if docker image inspect {{.APP_NAME}}:{{.IMAGE_TAG}} >/dev/null 2>&1; then
+          docker image inspect {{.APP_NAME}}:{{.IMAGE_TAG}} --format='
+          Image: {{.RepoTags}}
+          Created: {{.Created}}
+          Size: {{.Size}} bytes
+          Architecture: {{.Architecture}}
+          OS: {{.Os}}'
+        else
+          echo "❌ Image {{.APP_NAME}}:{{.IMAGE_TAG}} not found"
+        fi
+
+  # ===============================
+  # Development and Testing Builds
+  # ===============================
+
+  build-dev:
+    desc: Build application for development (with debug info)
+    vars:
+      APP_NAME: '{{.APP_NAME}}'
+      IMAGE_TAG: '{{.IMAGE_TAG | default "dev"}}'
+    cmds:
+      - echo "🔧 Building development image for {{.APP_NAME}}"
+      - task: build
+        vars:
+          APP_NAME: '{{.APP_NAME}}'
+          IMAGE_TAG: '{{.IMAGE_TAG}}'
+          BUILD_ARGS: "DEBUG=true"
+
+  build-test:
+    desc: Build application for testing
+    vars:
+      APP_NAME: '{{.APP_NAME}}'
+      IMAGE_TAG: '{{.IMAGE_TAG | default "test"}}'
+    cmds:
+      - echo "🧪 Building test image for {{.APP_NAME}}"
+      - task: build
+        vars:
+          APP_NAME: '{{.APP_NAME}}'
+          IMAGE_TAG: '{{.IMAGE_TAG}}'
+
+  # ===============================
+  # Internal Helper Tasks
+  # ===============================
+
+  _validate-build-requirements:
+    internal: true
+    vars:
+      APP_NAME: '{{.APP_NAME}}'
+    cmds:
+      - echo "🔍 Validating build requirements for {{.APP_NAME}}"
+      - |
+        # Check if Docker is available
+        if ! command -v docker >/dev/null 2>&1; then
+          echo "❌ Docker is required but not installed"
+          exit 1
+        fi
+        
+        # Check if Dockerfile exists
+        if [ ! -f "apps/{{.APP_NAME}}/{{.DOCKERFILE}}" ]; then
+          echo "❌ Dockerfile not found apps/{{.APP_NAME}}/{{.DOCKERFILE}}"
+          exit 1
+        fi
+        
+        # Check if app directory exists
+        if [ ! -d "apps/{{.APP_NAME}}" ]; then
+          echo "❌ Application directory not found apps/{{.APP_NAME}}"
+          exit 1
+        fi
+        
+        echo "✅ Build requirements validated"
+
+  _build-container-image:
+    internal: true
+    vars:
+      APP_NAME: '{{.APP_NAME}}'
+      IMAGE_TAG: '{{.IMAGE_TAG}}'
+      DOCKERFILE: '{{.DOCKERFILE}}'
+      BUILD_CONTEXT: '{{.BUILD_CONTEXT}}'
+      PLATFORM: '{{.PLATFORM}}'
+    cmds:
+      - |
+        cd apps/{{.APP_NAME}}
+        docker build \
+          --platform {{.PLATFORM}} \
+          -f {{.DOCKERFILE}} \
+          -t {{.APP_NAME}}:{{.IMAGE_TAG}} \
+          {{.BUILD_CONTEXT}}
+
+  _push-image:
+    internal: true
+    vars:
+      APP_NAME: '{{.APP_NAME}}'
+      REGISTRY: '{{.REGISTRY}}'
+      IMAGE_TAG: '{{.IMAGE_TAG}}'
+    cmds:
+      - |
+        # Tag for registry
+        docker tag {{.APP_NAME}}:{{.IMAGE_TAG}} {{.REGISTRY}}/{{.APP_NAME}}:{{.IMAGE_TAG}}
+        
+        # Push to registry
+        docker push {{.REGISTRY}}/{{.APP_NAME}}:{{.IMAGE_TAG}}
+
+  _discover-and-build-apps:
+    internal: true
+    cmds:
+      - |
+        echo "🔍 Discovering applications in apps/ directory"
+        for app_dir in apps/*/; do
+          if [ -d "$app_dir" ]; then
+            app_name=$(basename "$app_dir")
+            echo "Building $app_name..."
+            task build APP_NAME=$app_name || echo "Failed to build $app_name"
+          fi
+        done

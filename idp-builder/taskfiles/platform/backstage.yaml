@@ -1,0 +1,603 @@
+version: '3'
+
+# ===============================
+# Backstage Developer Portal Platform
+# ===============================
+
+vars:
+  # Standardized parameters
+  CLUSTER_NAME: '{{.CLUSTER_NAME | default "idp-cluster"}}'
+  PROVIDER: '{{.PROVIDER | default "kind"}}'
+  ENVIRONMENT: '{{.ENVIRONMENT | default "dev"}}'
+  NAMESPACE: '{{.NAMESPACE | default "backstage"}}'
+  
+  # Backstage specific configuration
+  BACKSTAGE_VERSION: '{{.BACKSTAGE_VERSION | default "latest"}}'
+  BACKSTAGE_DOMAIN: '{{.BACKSTAGE_DOMAIN | default "backstage.local"}}'
+  POSTGRES_PASSWORD: '{{.POSTGRES_PASSWORD | default "backstage123"}}'
+  GITHUB_TOKEN: '{{.GITHUB_TOKEN}}'
+  
+tasks:
+
+  # ===============================
+  # Backstage Installation
+  # ===============================
+
+  install-backstage:
+    desc: Install and configure Backstage Developer Portal
+    vars:
+      NAMESPACE: '{{.NAMESPACE}}'
+      DATABASE: '{{.DATABASE | default "postgres"}}'
+      ENABLE_INGRESS: '{{.ENABLE_INGRESS | default "true"}}'
+    cmds:
+      - echo "🚀 Installing Backstage Developer Portal for {{.PROVIDER}} cluster {{.CLUSTER_NAME}}"
+      - task: _validate-installation
+      - task: _setup-database
+        vars:
+          DATABASE: '{{.DATABASE}}'
+      - task: _create-backstage-config
+      - task: _install-backstage-core
+      - task: _setup-ingress
+        vars:
+          ENABLE_INGRESS: '{{.ENABLE_INGRESS}}'
+      - task: _verify-installation
+      - echo "✅ Backstage installation complete"
+
+  uninstall-backstage:
+    desc: Uninstall Backstage Developer Portal
+    vars:
+      NAMESPACE: '{{.NAMESPACE}}'
+    cmds:
+      - echo "🗑️ Uninstalling Backstage from namespace {{.NAMESPACE}}"
+      - task: _confirm-uninstall
+      - kubectl delete namespace {{.NAMESPACE}} --ignore-not-found=true
+      - echo "✅ Backstage uninstalled successfully"
+
+  # ===============================
+  # Configuration Management
+  # ===============================
+
+  update-config:
+    desc: Update Backstage configuration
+    vars:
+      CONFIG_FILE: '{{.CONFIG_FILE | default "app-config.yaml"}}'
+      NAMESPACE: '{{.NAMESPACE}}'
+    cmds:
+      - echo "⚙️ Updating Backstage configuration"
+      - |
+        if [ -f "{{.CONFIG_FILE}}" ]; then
+          kubectl create configmap backstage-config --from-file={{.CONFIG_FILE}} -n {{.NAMESPACE}} --dry-run=client -o yaml | kubectl apply -f -
+          kubectl rollout restart deployment/backstage -n {{.NAMESPACE}}
+          echo "✅ Configuration updated and Backstage restarted"
+        else
+          echo "❌ Configuration file {{.CONFIG_FILE}} not found"
+        fi
+
+  create-github-integration:
+    desc: Create GitHub integration configuration
+    vars:
+      GITHUB_TOKEN: '{{.GITHUB_TOKEN}}'
+      GITHUB_ORG: '{{.GITHUB_ORG}}'
+      NAMESPACE: '{{.NAMESPACE}}'
+    cmds:
+      - echo "🔗 Creating GitHub integration"
+      - |
+        if [ -z "{{.GITHUB_TOKEN}}" ]; then
+          echo "❌ GITHUB_TOKEN is required"
+          exit 1
+        fi
+        
+        # Create GitHub token secret
+        kubectl create secret generic github-credentials \
+          --from-literal=token={{.GITHUB_TOKEN}} \
+          -n {{.NAMESPACE}} \
+          --dry-run=client -o yaml | kubectl apply -f -
+        
+        echo "✅ GitHub integration configured"
+
+  # ===============================
+  # Plugin Management
+  # ===============================
+
+  list-plugins:
+    desc: List installed Backstage plugins
+    cmds:
+      - echo "🔌 Backstage Plugins"
+      - echo "==================="
+      - |
+        # This would typically read from the Backstage configuration
+        echo "📦 Core Plugins:"
+        echo "  - @backstage/plugin-catalog"
+        echo "  - @backstage/plugin-scaffolder"  
+        echo "  - @backstage/plugin-techdocs"
+        echo "  - @backstage/plugin-kubernetes"
+        echo "  - @backstage/plugin-github-actions"
+        echo ""
+        echo "📦 TeraSky Custom Plugins:"
+        echo "  - @terasky/plugin-custom-dashboard"
+        echo "  - @terasky/plugin-infrastructure-overview"
+
+  install-kubernetes-plugin:
+    desc: Configure Kubernetes plugin for Backstage
+    vars:
+      NAMESPACE: '{{.NAMESPACE}}'
+      CLUSTER_NAME: '{{.CLUSTER_NAME}}'
+    cmds:
+      - echo "☸️ Configuring Kubernetes plugin"
+      - |
+        # Create service account for Kubernetes plugin
+        kubectl create serviceaccount backstage-k8s-plugin -n {{.NAMESPACE}} --dry-run=client -o yaml | kubectl apply -f -
+        
+        # Create cluster role binding
+        cat << EOF | kubectl apply -f -
+        apiVersion: rbac.authorization.k8s.io/v1
+        kind: ClusterRoleBinding
+        metadata:
+          name: backstage-k8s-plugin
+        subjects:
+        - kind: ServiceAccount
+          name: backstage-k8s-plugin
+          namespace: {{.NAMESPACE}}
+        roleRef:
+          kind: ClusterRole
+          name: view
+          apiGroup: rbac.authorization.k8s.io
+        EOF
+        
+        echo "✅ Kubernetes plugin configured"
+
+  # ===============================
+  # Database Management  
+  # ===============================
+
+  backup-database:
+    desc: Create backup of Backstage database
+    vars:
+      NAMESPACE: '{{.NAMESPACE}}'
+      BACKUP_NAME: '{{.BACKUP_NAME | default "backstage-backup-$(date +%Y%m%d-%H%M%S)"}}'
+    cmds:
+      - echo "💾 Creating database backup {{.BACKUP_NAME}}"
+      - |
+        kubectl exec deployment/postgres -n {{.NAMESPACE}} -- pg_dump -U postgres backstage > {{.BACKUP_NAME}}.sql
+        echo "✅ Database backup saved as {{.BACKUP_NAME}}.sql"
+
+  restore-database:
+    desc: Restore Backstage database from backup
+    vars:
+      NAMESPACE: '{{.NAMESPACE}}'
+      BACKUP_FILE: '{{.BACKUP_FILE}}'
+    cmds:
+      - echo "🔄 Restoring database from {{.BACKUP_FILE}}"
+      - |
+        if [ ! -f "{{.BACKUP_FILE}}" ]; then
+          echo "❌ Backup file {{.BACKUP_FILE}} not found"
+          exit 1
+        fi
+        
+        kubectl exec -i deployment/postgres -n {{.NAMESPACE}} -- psql -U postgres -d backstage < {{.BACKUP_FILE}}
+        kubectl rollout restart deployment/backstage -n {{.NAMESPACE}}
+        echo "✅ Database restored and Backstage restarted"
+
+  # ===============================
+  # Development and Testing
+  # ===============================
+
+  build-custom-image:
+    desc: Build custom Backstage Docker image
+    vars:
+      IMAGE_TAG: '{{.IMAGE_TAG | default "custom-backstage:latest"}}'
+      DOCKERFILE: '{{.DOCKERFILE | default "Dockerfile.backstage"}}'
+    cmds:
+      - echo "🏗️ Building custom Backstage image {{.IMAGE_TAG}}"
+      - |
+        if [ ! -f "{{.DOCKERFILE}}" ]; then
+          echo "❌ Dockerfile {{.DOCKERFILE}} not found"
+          exit 1
+        fi
+        
+        docker build -f {{.DOCKERFILE}} -t {{.IMAGE_TAG}} .
+        echo "✅ Custom Backstage image built {{.IMAGE_TAG}}"
+
+  dev-start:
+    desc: Start Backstage in development mode
+    vars:
+      PORT: '{{.PORT | default "3000"}}'
+    cmds:
+      - echo "🔧 Starting Backstage development server on port {{.PORT}}"
+      - |
+        echo "Starting local development server..."
+        echo "Navigate to http://localhost {{.PORT}} when ready"
+        # This would typically start yarn dev or npm start
+        echo "Run 'yarn dev' or 'npm start' in your Backstage project directory"
+
+  access-ui:
+    desc: Access Backstage UI (port-forward)
+    vars:
+      NAMESPACE: '{{.NAMESPACE}}'
+      PORT: '{{.PORT | default "3000"}}'
+    cmds:
+      - echo "🌐 Starting Backstage UI port-forward to localhost {{.PORT}}"
+      - echo "Navigate to http://localhost {{.PORT}}"
+      - kubectl port-forward svc/backstage -n {{.NAMESPACE}} {{.PORT}}:80
+
+  # ===============================
+  # Status and Health Checks
+  # ===============================
+
+  status:
+    desc: Show Backstage status and health
+    vars:
+      NAMESPACE: '{{.NAMESPACE}}'
+    cmds:
+      - echo "📊 Backstage Status in {{.NAMESPACE}}"
+      - echo "===================================="
+      - echo ""
+      - echo "🏃 Pods Status"
+      - kubectl get pods -n {{.NAMESPACE}} -o wide
+      - echo ""
+      - echo "🌐 Services Status"
+      - kubectl get svc -n {{.NAMESPACE}}
+      - echo ""
+      - echo "🔧 ConfigMaps"
+      - kubectl get configmaps -n {{.NAMESPACE}}
+      - echo ""
+      - echo "🔑 Secrets"
+      - kubectl get secrets -n {{.NAMESPACE}}
+
+  health-check:
+    desc: Comprehensive Backstage health check
+    vars:
+      NAMESPACE: '{{.NAMESPACE}}'
+    cmds:
+      - echo "🏥 Backstage Health Check"
+      - echo "========================"
+      - echo ""
+      - |
+        # Check namespace
+        if kubectl get namespace {{.NAMESPACE}} >/dev/null 2>&1; then
+          echo "✅ Namespace {{.NAMESPACE}} exists"
+        else
+          echo "❌ Namespace {{.NAMESPACE}} not found"
+          exit 1
+        fi
+        
+        # Check Backstage deployment
+        if kubectl get deployment backstage -n {{.NAMESPACE}} >/dev/null 2>&1; then
+          READY=$(kubectl get deployment backstage -n {{.NAMESPACE}} -o jsonpath='{.status.readyReplicas}')
+          DESIRED=$(kubectl get deployment backstage -n {{.NAMESPACE}} -o jsonpath='{.spec.replicas}')
+          if [ "$READY" = "$DESIRED" ]; then
+            echo "✅ Backstage ($READY/$DESIRED ready)"
+          else
+            echo "❌ Backstage ($READY/$DESIRED ready)"
+          fi
+        else
+          echo "❌ Backstage deployment not found"
+        fi
+        
+        # Check PostgreSQL database
+        if kubectl get deployment postgres -n {{.NAMESPACE}} >/dev/null 2>&1; then
+          READY=$(kubectl get deployment postgres -n {{.NAMESPACE}} -o jsonpath='{.status.readyReplicas}')
+          DESIRED=$(kubectl get deployment postgres -n {{.NAMESPACE}} -o jsonpath='{.spec.replicas}')
+          if [ "$READY" = "$DESIRED" ]; then
+            echo "✅ PostgreSQL ($READY/$DESIRED ready)"
+          else
+            echo "❌ PostgreSQL ($READY/$DESIRED ready)"
+          fi
+        else
+          echo "⚠️ PostgreSQL deployment not found (may be using external database)"
+        fi
+
+  logs:
+    desc: Show Backstage application logs
+    vars:
+      NAMESPACE: '{{.NAMESPACE}}'
+      LINES: '{{.LINES | default "100"}}'
+      FOLLOW: '{{.FOLLOW | default "false"}}'
+    cmds:
+      - echo "📄 Backstage Logs (last {{.LINES}} lines)"
+      - |
+        if [ "{{.FOLLOW}}" = "true" ]; then
+          kubectl logs -f deployment/backstage -n {{.NAMESPACE}} --tail={{.LINES}}
+        else
+          kubectl logs deployment/backstage -n {{.NAMESPACE}} --tail={{.LINES}}
+        fi
+
+  # ===============================
+  # Internal Helper Tasks
+  # ===============================
+
+  _validate-installation:
+    internal: true
+    cmds:
+      - echo "🔍 Validating Backstage installation prerequisites"
+      - |
+        # Check if kubectl is available
+        if ! command -v kubectl >/dev/null 2>&1; then
+          echo "❌ kubectl is required but not installed"
+          exit 1
+        fi
+        
+        # Check cluster connectivity
+        if ! kubectl cluster-info >/dev/null 2>&1; then
+          echo "❌ Cannot connect to Kubernetes cluster"
+          exit 1
+        fi
+        
+        echo "✅ Prerequisites validated"
+
+  _setup-database:
+    internal: true
+    vars:
+      DATABASE: '{{.DATABASE}}'
+      NAMESPACE: '{{.NAMESPACE}}'
+      POSTGRES_PASSWORD: '{{.POSTGRES_PASSWORD}}'
+    cmds:
+      - echo "🗄️ Setting up {{.DATABASE}} database"
+      - |
+        if [ "{{.DATABASE}}" = "postgres" ]; then
+          # Create PostgreSQL deployment
+          cat << EOF | kubectl apply -f -
+          apiVersion: apps/v1
+          kind: Deployment
+          metadata:
+            name: postgres
+            namespace: {{.NAMESPACE}}
+          spec:
+            replicas: 1
+            selector:
+              matchLabels:
+                app: postgres
+            template:
+              metadata:
+                labels:
+                  app: postgres
+              spec:
+                containers:
+                - name: postgres
+                  image: postgres:13
+                  env:
+                  - name: POSTGRES_USER
+                    value: postgres
+                  - name: POSTGRES_PASSWORD
+                    value: "{{.POSTGRES_PASSWORD}}"
+                  - name: POSTGRES_DB
+                    value: backstage
+                  ports:
+                  - containerPort: 5432
+                  volumeMounts:
+                  - name: postgres-storage
+                    mountPath: /var/lib/postgresql/data
+                volumes:
+                - name: postgres-storage
+                  emptyDir: {}
+          ---
+          apiVersion: v1
+          kind: Service
+          metadata:
+            name: postgres
+            namespace: {{.NAMESPACE}}
+          spec:
+            selector:
+              app: postgres
+            ports:
+            - port: 5432
+              targetPort: 5432
+        EOF
+          
+          # Wait for PostgreSQL to be ready
+          kubectl wait --for=condition=available --timeout=300s deployment/postgres -n {{.NAMESPACE}}
+        else
+          echo "⏭️ Skipping database setup for {{.DATABASE}}"
+        fi
+
+  _create-backstage-config:
+    internal: true
+    vars:
+      NAMESPACE: '{{.NAMESPACE}}'
+      DOMAIN: '{{.BACKSTAGE_DOMAIN}}'
+    cmds:
+      - echo "⚙️ Creating Backstage configuration"
+      - |
+        cat << EOF | kubectl apply -f -
+        apiVersion: v1
+        kind: ConfigMap
+        metadata:
+          name: backstage-config
+          namespace: {{.NAMESPACE}}
+        data:
+          app-config.yaml: |
+            app:
+              title: IDP Stack Backstage
+              baseUrl: http://{{.DOMAIN}}
+            
+            organization:
+              name: IDP Stack Platform
+            
+            backend:
+              baseUrl: http://{{.DOMAIN}}
+              listen:
+                port: 7007
+                host: 0.0.0.0
+              csp:
+                connect-src: ["'self'", 'http:', 'https:']
+              cors:
+                origin: http://{{.DOMAIN}}
+                methods: [GET, HEAD, PATCH, POST, PUT, DELETE]
+                credentials: true
+              database:
+                client: pg
+                connection:
+                  host: postgres
+                  port: 5432
+                  user: postgres
+                  password: {{.POSTGRES_PASSWORD}}
+                  database: backstage
+            
+            integrations:
+              github:
+                - host: github.com
+                  token: \${GITHUB_TOKEN}
+            
+            proxy: {}
+            
+            techdocs:
+              builder: 'local'
+              generator:
+                runIn: 'local'
+              publisher:
+                type: 'local'
+            
+            auth:
+              providers: {}
+            
+            scaffolder: {}
+            
+            catalog:
+              import:
+                entityFilename: catalog-info.yaml
+                pullRequestBranchName: backstage-integration
+              rules:
+                - allow: [Component, System, API, Resource, Location]
+              locations:
+                - type: file
+                  target: ../../examples/entities.yaml
+        EOF
+
+  _install-backstage-core:
+    internal: true
+    vars:
+      NAMESPACE: '{{.NAMESPACE}}'
+      VERSION: '{{.BACKSTAGE_VERSION}}'
+    cmds:
+      - echo "⚙️ Installing Backstage core application"
+      - |
+        # Create namespace
+        kubectl create namespace {{.NAMESPACE}} --dry-run=client -o yaml | kubectl apply -f -
+        
+        # Create Backstage deployment
+        cat << EOF | kubectl apply -f -
+        apiVersion: apps/v1
+        kind: Deployment
+        metadata:
+          name: backstage
+          namespace: {{.NAMESPACE}}
+        spec:
+          replicas: 1
+          selector:
+            matchLabels:
+              app: backstage
+          template:
+            metadata:
+              labels:
+                app: backstage
+            spec:
+              containers:
+              - name: backstage
+                image: backstage/backstage:{{.VERSION}}
+                ports:
+                - containerPort: 7007
+                env:
+                - name: GITHUB_TOKEN
+                  valueFrom:
+                    secretKeyRef:
+                      name: github-credentials
+                      key: token
+                      optional: true
+                volumeMounts:
+                - name: config
+                  mountPath: /app/app-config.yaml
+                  subPath: app-config.yaml
+                livenessProbe:
+                  httpGet:
+                    path: /
+                    port: 7007
+                  initialDelaySeconds: 60
+                  periodSeconds: 10
+                readinessProbe:
+                  httpGet:
+                    path: /
+                    port: 7007
+                  initialDelaySeconds: 30
+                  periodSeconds: 5
+              volumes:
+              - name: config
+                configMap:
+                  name: backstage-config
+        ---
+        apiVersion: v1
+        kind: Service
+        metadata:
+          name: backstage
+          namespace: {{.NAMESPACE}}
+        spec:
+          selector:
+            app: backstage
+          ports:
+          - port: 80
+            targetPort: 7007
+        EOF
+
+  _setup-ingress:
+    internal: true
+    vars:
+      ENABLE_INGRESS: '{{.ENABLE_INGRESS}}'
+      NAMESPACE: '{{.NAMESPACE}}'
+      DOMAIN: '{{.BACKSTAGE_DOMAIN}}'
+    cmds:
+      - |
+        if [ "{{.ENABLE_INGRESS}}" = "true" ]; then
+          echo "🌐 Setting up Backstage ingress"
+          cat << EOF | kubectl apply -f -
+          apiVersion: networking.k8s.io/v1
+          kind: Ingress
+          metadata:
+            name: backstage-ingress
+            namespace: {{.NAMESPACE}}
+            annotations:
+              nginx.ingress.kubernetes.io/ssl-redirect: "false"
+              nginx.ingress.kubernetes.io/force-ssl-redirect: "false"
+          spec:
+            ingressClassName: nginx
+            rules:
+            - host: {{.DOMAIN}}
+              http:
+                paths:
+                - path: /
+                  pathType: Prefix
+                  backend:
+                    service:
+                      name: backstage
+                      port:
+                        number: 80
+        EOF
+        else
+          echo "⏭️ Skipping ingress setup"
+        fi
+
+  _verify-installation:
+    internal: true
+    vars:
+      NAMESPACE: '{{.NAMESPACE}}'
+    cmds:
+      - echo "✅ Verifying Backstage installation"
+      - |
+        # Wait for Backstage to be ready
+        kubectl wait --for=condition=available --timeout=600s deployment/backstage -n {{.NAMESPACE}}
+        echo "✅ Backstage is ready"
+
+  _confirm-uninstall:
+    internal: true
+    vars:
+      NAMESPACE: '{{.NAMESPACE}}'
+    cmds:
+      - |
+        echo "⚠️ WARNING This will delete all Backstage resources in namespace {{.NAMESPACE}}"
+        echo "This includes the Backstage application, database, and all configurations."
+        echo "This action cannot be undone."
+        echo ""
+        read -p "Are you sure you want to continue? (y/N) " -n 1 -r
+        echo ""
+        if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+          echo "❌ Operation cancelled"
+          exit 1
+        fi

@@ -1,0 +1,100 @@
+version: '3'
+
+# IDP Usage - Unified Workflow Integration
+# Provides access to all application development workflows
+
+includes:
+  onboarding: ./onboarding.yaml
+  demo: ./demo.yaml
+  production: ./production.yaml
+  cicd: ./cicd.yaml
+
+tasks:
+  help:
+    desc: Show application workflow help and examples
+    cmds:
+      - |
+        cat << 'EOF'
+        🚀 IDP Usage - Application Development Workflows
+        ================================================
+        
+        DEVELOPER ONBOARDING WORKFLOWS:
+          task workflows:developer-onboarding APP_NAME=my-app DEVELOPER_NAME="John Doe"
+          task workflows:setup-workspace APP_NAME=my-app
+          task workflows:setup-development-tools
+          task workflows:deploy-sample-apps
+        
+        DEMONSTRATION WORKFLOWS:
+          task workflows:microservices-demo STACK_TYPE=go
+          task workflows:full-stack-demo FRONTEND=react BACKEND=nodejs
+          task workflows:ai-integration-demo
+          task workflows:performance-demo APP_NAME=load-test
+        
+        PRODUCTION WORKFLOWS:
+          task workflows:production-deploy APP_NAME=my-app CLUSTER_NAME=prod IMAGE_TAG=v1.0.0
+          task workflows:production-rollback APP_NAME=my-app
+          task workflows:show-production-status APP_NAME=my-app
+        
+        CI/CD INTEGRATION WORKFLOWS:
+          task workflows:setup-ci-cd APP_NAME=my-app PIPELINE_TYPE=github
+          task workflows:setup-quality-gates APP_NAME=my-app
+          task workflows:setup-monitoring-integration APP_NAME=my-app
+        
+        WORKFLOW COMPONENTS:
+          Onboarding:    Developer setup, workspace configuration, platform access
+          Demo:          Application demonstrations, stack showcases, feature demos
+          Production:    Production deployment, blue-green strategy, monitoring
+          CI/CD:         Pipeline integration, quality gates, automation
+        
+        EXAMPLES:
+          # Complete developer onboarding
+          task workflows:developer-onboarding APP_NAME=api-service DEVELOPER_NAME="Jane Smith"
+        
+          # Full-stack microservices demonstration
+          task workflows:microservices-demo STACK_TYPE=go
+        
+          # Production deployment with safety checks
+          task workflows:production-deploy APP_NAME=api-service CLUSTER_NAME=prod-aws IMAGE_TAG=v2.1.0
+        
+          # Setup complete CI/CD pipeline
+          task workflows:setup-ci-cd APP_NAME=web-app PIPELINE_TYPE=github
+        
+        📋 Use 'task workflows:WORKFLOW_NAME:help' for detailed workflow help
+        EOF
+
+  # Quick access to main workflows
+  developer-onboarding:
+    desc: Complete developer onboarding workflow
+    cmds:
+      - task: onboarding:developer-onboarding
+        vars:
+          APP_NAME: '{{.APP_NAME}}'
+          DEVELOPER_NAME: '{{.DEVELOPER_NAME}}'
+          NAMESPACE: '{{.NAMESPACE}}'
+
+  microservices-demo:
+    desc: Full microservices demonstration
+    cmds:
+      - task: demo:microservices-demo
+        vars:
+          STACK_TYPE: '{{.STACK_TYPE}}'
+          NAMESPACE: '{{.NAMESPACE}}'
+
+  production-deploy:
+    desc: Deploy to production with safety checks
+    cmds:
+      - task: production:production-deploy
+        vars:
+          APP_NAME: '{{.APP_NAME}}'
+          CLUSTER_NAME: '{{.CLUSTER_NAME}}'
+          IMAGE_TAG: '{{.IMAGE_TAG}}'
+          NAMESPACE: '{{.NAMESPACE}}'
+
+  setup-ci-cd:
+    desc: Setup complete CI/CD pipeline
+    cmds:
+      - task: cicd:setup-ci-cd
+        vars:
+          APP_NAME: '{{.APP_NAME}}'
+          PIPELINE_TYPE: '{{.PIPELINE_TYPE}}'
+          REGISTRY: '{{.REGISTRY}}'

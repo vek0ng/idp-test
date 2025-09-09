@@ -1,0 +1,554 @@
+version: '3'
+
+# ===============================
+# Kubernetes Cluster Management
+# ===============================
+
+vars:
+  # Standardized parameters
+  CLUSTER_NAME: '{{.CLUSTER_NAME | default "idp-cluster"}}'
+  PROVIDER: '{{.PROVIDER | default "kind"}}'
+  ENVIRONMENT: '{{.ENVIRONMENT | default "dev"}}'
+  REGION: '{{.REGION | default "ap-southeast-1"}}'
+
+tasks:
+
+  # ===============================
+  # Unified Cluster Operations
+  # ===============================
+
+  create-cluster:
+    desc: Create a Kubernetes cluster on specified provider (CLUSTER_NAME and PROVIDER required)
+    vars:
+      CLUSTER_NAME: '{{.CLUSTER_NAME}}'
+      PROVIDER: '{{.PROVIDER}}'
+      ENVIRONMENT: '{{.ENVIRONMENT}}'
+      REGION: '{{.REGION}}'
+      MIN_NODES: '{{.MIN_NODES | default "1"}}'
+      MAX_NODES: '{{.MAX_NODES | default "3"}}'
+      NODE_TYPE: '{{.NODE_TYPE | default ""}}'
+    preconditions:
+      - sh: 'case "{{.PROVIDER}}" in kind|aws|gcp|azure) true;; *) false;; esac'
+        msg: "PROVIDER must be one of: kind, aws, gcp, azure (got: {{.PROVIDER}})"
+      - sh: '[ -n "{{.CLUSTER_NAME}}" ]'
+        msg: "CLUSTER_NAME is required"
+    cmds:
+      - echo "🏗️ Creating {{.PROVIDER}} cluster {{.CLUSTER_NAME}} in {{.ENVIRONMENT}} environment"
+      - task: core:validate-environment
+        vars:
+          PROVIDER: '{{.PROVIDER}}'
+          CLUSTER_NAME: '{{.CLUSTER_NAME}}'
+      - task: _create-{{.PROVIDER}}-cluster
+        vars:
+          CLUSTER_NAME: '{{.CLUSTER_NAME}}'
+          ENVIRONMENT: '{{.ENVIRONMENT}}'
+          REGION: '{{.REGION}}'
+          MIN_NODES: '{{.MIN_NODES}}'
+          MAX_NODES: '{{.MAX_NODES}}'
+          NODE_TYPE: '{{.NODE_TYPE}}'
+      - task: _post-cluster-setup
+        vars:
+          PROVIDER: '{{.PROVIDER}}'
+          CLUSTER_NAME: '{{.CLUSTER_NAME}}'
+      - echo "✅ Cluster {{.CLUSTER_NAME}} created successfully on {{.PROVIDER}}"
+
+  delete-cluster:
+    desc: Delete a Kubernetes cluster (CLUSTER_NAME and PROVIDER required)
+    vars:
+      CLUSTER_NAME: '{{.CLUSTER_NAME}}'
+      PROVIDER: '{{.PROVIDER}}'
+      DELETE_RESOURCES: '{{.DELETE_RESOURCES | default "false"}}'
+    preconditions:
+      - sh: 'case "{{.PROVIDER}}" in kind|aws|gcp|azure) true;; *) false;; esac'
+        msg: "PROVIDER must be one of: kind, aws, gcp, azure"
+      - sh: '[ -n "{{.CLUSTER_NAME}}" ]'
+        msg: "CLUSTER_NAME is required"
+    cmds:
+      - echo "🗑️ Deleting {{.PROVIDER}} cluster {{.CLUSTER_NAME}}"
+      - task: _confirm-delete
+        vars:
+          CLUSTER_NAME: '{{.CLUSTER_NAME}}'
+          PROVIDER: '{{.PROVIDER}}'
+      - task: _delete-{{.PROVIDER}}-cluster
+        vars:
+          CLUSTER_NAME: '{{.CLUSTER_NAME}}'
+          DELETE_RESOURCES: '{{.DELETE_RESOURCES}}'
+      - echo "✅ Cluster {{.CLUSTER_NAME}} deleted successfully"
+
+  list-clusters:
+    desc: List all clusters for the specified provider
+    vars:
+      PROVIDER: '{{.PROVIDER}}'
+    cmds:
+      - echo "📋 Listing {{.PROVIDER}} clusters:"
+      - task: _list-{{.PROVIDER}}-clusters
+
+  get-cluster-info:
+    desc: Get information about a specific cluster (CLUSTER_NAME and PROVIDER required)
+    vars:
+      CLUSTER_NAME: '{{.CLUSTER_NAME}}'
+      PROVIDER: '{{.PROVIDER}}'
+    preconditions:
+      - sh: '[ -n "{{.CLUSTER_NAME}}" ]'
+        msg: "CLUSTER_NAME is required"
+    cmds:
+      - echo "ℹ️ Getting info for {{.PROVIDER}} cluster {{.CLUSTER_NAME}}"
+      - task: _get-{{.PROVIDER}}-info
+        vars:
+          CLUSTER_NAME: '{{.CLUSTER_NAME}}'
+
+  switch-context:
+    desc: Switch kubectl context to specified cluster (CLUSTER_NAME and PROVIDER required)
+    vars:
+      CLUSTER_NAME: '{{.CLUSTER_NAME}}'
+      PROVIDER: '{{.PROVIDER}}'
+    preconditions:
+      - sh: '[ -n "{{.CLUSTER_NAME}}" ]'
+        msg: "CLUSTER_NAME is required"
+    cmds:
+      - echo "🔄 Switching kubectl context to {{.PROVIDER}} cluster {{.CLUSTER_NAME}}"
+      - task: _switch-{{.PROVIDER}}-context
+        vars:
+          CLUSTER_NAME: '{{.CLUSTER_NAME}}'
+          PROVIDER: '{{.PROVIDER}}'
+
+  cluster-status:
+    desc: Show status of the current cluster
+    cmds:
+      - echo "📊 Cluster Status:"
+      - |
+        if kubectl cluster-info >/dev/null 2>&1; then
+          echo "✅ kubectl connected to cluster"
+          kubectl cluster-info
+          echo ""
+          echo "📊 Node Status:"
+          kubectl get nodes -o wide
+          echo ""
+          echo "📊 System Pods:"
+          kubectl get pods -n kube-system
+        else
+          echo "❌ No active kubectl context found"
+          echo "Use 'task switch-context' to connect to a cluster"
+          exit 1
+        fi
+
+  # ===============================
+  # Kind Cluster Operations
+  # ===============================
+
+  _create-kind-cluster:
+    internal: true
+    vars:
+      CLUSTER_NAME: '{{.CLUSTER_NAME}}'
+    cmds:
+      - |
+        echo "🐳 Creating Kind cluster {{.CLUSTER_NAME}}"
+        
+        # Check if cluster already exists
+        if kind get clusters | grep -q "^{{.CLUSTER_NAME}}$"; then
+          echo "⚠️ Cluster {{.CLUSTER_NAME}} already exists"
+          exit 0
+        fi
+        
+        # Create cluster configuration
+        cat > /tmp/kind-config-{{.CLUSTER_NAME}}.yaml << 'EOF'
+        kind: Cluster
+        apiVersion: kind.x-k8s.io/v1alpha4
+        name: {{.CLUSTER_NAME}}
+        nodes:
+        - role: control-plane
+          kubeadmConfigPatches:
+          - |
+            kind: InitConfiguration
+            nodeRegistration:
+              kubeletExtraArgs:
+                node-labels: "ingress-ready=true"
+          extraPortMappings:
+          - containerPort: 80
+            hostPort: 80
+            protocol: TCP
+          - containerPort: 443
+            hostPort: 443
+            protocol: TCP
+        - role: worker
+        - role: worker
+        EOF
+        
+        # Create the cluster
+        kind create cluster --config /tmp/kind-config-{{.CLUSTER_NAME}}.yaml
+        
+        # Clean up config file
+        rm /tmp/kind-config-{{.CLUSTER_NAME}}.yaml
+        
+        echo "✅ Kind cluster {{.CLUSTER_NAME}} created"
+
+  _delete-kind-cluster:
+    internal: true
+    vars:
+      CLUSTER_NAME: '{{.CLUSTER_NAME}}'
+    cmds:
+      - |
+        if kind get clusters | grep -q "^{{.CLUSTER_NAME}}$"; then
+          echo "🗑️ Deleting Kind cluster {{.CLUSTER_NAME}}"
+          kind delete cluster --name {{.CLUSTER_NAME}}
+          echo "✅ Kind cluster {{.CLUSTER_NAME}} deleted"
+        else
+          echo "⚠️ Kind cluster {{.CLUSTER_NAME}} not found"
+        fi
+
+  _list-kind-clusters:
+    internal: true
+    cmds:
+      - |
+        if command -v kind >/dev/null 2>&1; then
+          echo "Kind clusters:"
+          kind get clusters || echo "  No Kind clusters found"
+        else
+          echo "❌ Kind not installed"
+        fi
+
+  _get-kind-cluster-info:
+    internal: true
+    vars:
+      CLUSTER_NAME: '{{.CLUSTER_NAME}}'
+    cmds:
+      - |
+        if kind get clusters | grep -q "^{{.CLUSTER_NAME}}$"; then
+          echo "Kind cluster {{.CLUSTER_NAME}}"
+          echo "Status: Running"
+          kubectl --context kind-{{.CLUSTER_NAME}} cluster-info
+        else
+          echo "❌ Kind cluster {{.CLUSTER_NAME}} not found"
+          exit 1
+        fi
+
+  # ===============================
+  # AWS EKS Cluster Operations
+  # ===============================
+
+  _create-aws-cluster:
+    internal: true
+    vars:
+      CLUSTER_NAME: '{{.CLUSTER_NAME}}'
+      REGION: '{{.REGION | default "ap-southeast-1"}}'
+      MIN_NODES: '{{.MIN_NODES | default "1"}}'
+      MAX_NODES: '{{.MAX_NODES | default "3"}}'
+      NODE_TYPE: '{{.NODE_TYPE | default "t3.medium"}}'
+    cmds:
+      - |
+        echo "☁️ Creating EKS cluster {{.CLUSTER_NAME}} in {{.REGION}}"
+        
+        if command -v eksctl >/dev/null 2>&1; then
+          # Create cluster using eksctl
+          eksctl create cluster \
+            --name={{.CLUSTER_NAME}} \
+            --region={{.REGION}} \
+            --nodes={{.MIN_NODES}} \
+            --nodes-max={{.MAX_NODES}} \
+            --node-type={{.NODE_TYPE}} \
+            --managed \
+            --with-oidc
+          
+          echo "✅ EKS cluster {{.CLUSTER_NAME}} created"
+        else
+          echo "❌ eksctl not found. Please install eksctl for EKS management"
+          exit 1
+        fi
+
+  _delete-aws-cluster:
+    internal: true
+    vars:
+      CLUSTER_NAME: '{{.CLUSTER_NAME}}'
+      REGION: '{{.REGION | default "ap-southeast-1"}}'
+    cmds:
+      - |
+        if command -v eksctl >/dev/null 2>&1; then
+          echo "🗑️ Deleting EKS cluster {{.CLUSTER_NAME}}"
+          eksctl delete cluster --name={{.CLUSTER_NAME}} --region={{.REGION}}
+        else
+          echo "❌ eksctl not found"
+          exit 1
+        fi
+
+  _list-aws-clusters:
+    internal: true
+    cmds:
+      - |
+        if command -v aws >/dev/null 2>&1; then
+          echo "EKS clusters:"
+          aws eks list-clusters --query 'clusters[*]' --output table
+        else
+          echo "❌ AWS CLI not installed"
+        fi
+
+  _get-aws-cluster-info:
+    internal: true
+    vars:
+      CLUSTER_NAME: '{{.CLUSTER_NAME}}'
+    cmds:
+      - |
+        if command -v aws >/dev/null 2>&1; then
+          aws eks describe-cluster --name {{.CLUSTER_NAME}} --query 'cluster.{Name:name,Status:status,Endpoint:endpoint,Version:version}' --output table
+        else
+          echo "❌ AWS CLI not installed"
+        fi
+
+  # ===============================
+  # GCP GKE Cluster Operations
+  # ===============================
+
+  _create-gcp-cluster:
+    internal: true
+    vars:
+      CLUSTER_NAME: '{{.CLUSTER_NAME}}'
+      REGION: '{{.REGION | default "us-central1"}}'
+      MIN_NODES: '{{.MIN_NODES | default "1"}}'
+      MAX_NODES: '{{.MAX_NODES | default "3"}}'
+      NODE_TYPE: '{{.NODE_TYPE | default "e2-medium"}}'
+    cmds:
+      - |
+        echo "☁️ Creating GKE cluster {{.CLUSTER_NAME}} in {{.REGION}}"
+        
+        if command -v gcloud >/dev/null 2>&1; then
+          gcloud container clusters create {{.CLUSTER_NAME}} \
+            --zone={{.REGION}}-a \
+            --num-nodes={{.MIN_NODES}} \
+            --enable-autoscaling \
+            --min-nodes={{.MIN_NODES}} \
+            --max-nodes={{.MAX_NODES}} \
+            --machine-type={{.NODE_TYPE}} \
+            --enable-autorepair \
+            --enable-autoupgrade
+          
+          echo "✅ GKE cluster {{.CLUSTER_NAME}} created"
+        else
+          echo "❌ gcloud not found"
+          exit 1
+        fi
+
+  _delete-gcp-cluster:
+    internal: true
+    vars:
+      CLUSTER_NAME: '{{.CLUSTER_NAME}}'
+      REGION: '{{.REGION | default "us-central1"}}'
+    cmds:
+      - |
+        if command -v gcloud >/dev/null 2>&1; then
+          echo "🗑️ Deleting GKE cluster {{.CLUSTER_NAME}}"
+          gcloud container clusters delete {{.CLUSTER_NAME}} --zone={{.REGION}}-a --quiet
+        else
+          echo "❌ gcloud not found"
+          exit 1
+        fi
+
+  _list-gcp-clusters:
+    internal: true
+    cmds:
+      - |
+        if command -v gcloud >/dev/null 2>&1; then
+          echo "GKE clusters:"
+          gcloud container clusters list
+        else
+          echo "❌ gcloud not installed"
+        fi
+
+  _get-gcp-cluster-info:
+    internal: true
+    vars:
+      CLUSTER_NAME: '{{.CLUSTER_NAME}}'
+    cmds:
+      - |
+        if command -v gcloud >/dev/null 2>&1; then
+          gcloud container clusters describe {{.CLUSTER_NAME}} --format="table(name,status,currentMasterVersion,endpoint,location)"
+        else
+          echo "❌ gcloud not installed"
+        fi
+
+  # ===============================
+  # Azure AKS Cluster Operations
+  # ===============================
+
+  _create-azure-cluster:
+    internal: true
+    vars:
+      CLUSTER_NAME: '{{.CLUSTER_NAME}}'
+      REGION: '{{.REGION | default "eastus"}}'
+      MIN_NODES: '{{.MIN_NODES | default "1"}}'
+      NODE_TYPE: '{{.NODE_TYPE | default "Standard_DS2_v2"}}'
+    cmds:
+      - |
+        echo "☁️ Creating AKS cluster {{.CLUSTER_NAME}} in {{.REGION}}"
+        
+        if command -v az >/dev/null 2>&1; then
+          # Create resource group
+          az group create --name {{.CLUSTER_NAME}}-rg --location {{.REGION}}
+          
+          # Create AKS cluster
+          az aks create \
+            --resource-group {{.CLUSTER_NAME}}-rg \
+            --name {{.CLUSTER_NAME}} \
+            --location {{.REGION}} \
+            --node-count {{.MIN_NODES}} \
+            --node-vm-size {{.NODE_TYPE}} \
+            --enable-managed-identity \
+            --generate-ssh-keys
+          
+          echo "✅ AKS cluster {{.CLUSTER_NAME}} created"
+        else
+          echo "❌ Azure CLI not found"
+          exit 1
+        fi
+
+  _delete-azure-cluster:
+    internal: true
+    vars:
+      CLUSTER_NAME: '{{.CLUSTER_NAME}}'
+    cmds:
+      - |
+        if command -v az >/dev/null 2>&1; then
+          echo "🗑️ Deleting AKS cluster {{.CLUSTER_NAME}}"
+          az aks delete --resource-group {{.CLUSTER_NAME}}-rg --name {{.CLUSTER_NAME}} --yes --no-wait
+          az group delete --name {{.CLUSTER_NAME}}-rg --yes --no-wait
+        else
+          echo "❌ Azure CLI not found"
+          exit 1
+        fi
+
+  _list-azure-clusters:
+    internal: true
+    cmds:
+      - |
+        if command -v az >/dev/null 2>&1; then
+          echo "AKS clusters:"
+          az aks list --output table
+        else
+          echo "❌ Azure CLI not installed"
+        fi
+
+  _get-azure-cluster-info:
+    internal: true
+    vars:
+      CLUSTER_NAME: '{{.CLUSTER_NAME}}'
+    cmds:
+      - |
+        if command -v az >/dev/null 2>&1; then
+          az aks show --name {{.CLUSTER_NAME}} --resource-group {{.CLUSTER_NAME}}-rg --output table
+        else
+          echo "❌ Azure CLI not installed"
+        fi
+
+  # ===============================
+  # Common Helper Tasks
+  # ===============================
+
+  _validate-cluster-creation:
+    internal: true
+    vars:
+      PROVIDER: '{{.PROVIDER}}'
+      CLUSTER_NAME: '{{.CLUSTER_NAME}}'
+    cmds:
+      - |
+        echo "🔍 Validating cluster creation parameters..."
+        echo "  Provider {{.PROVIDER}}"
+        echo "  Cluster Name {{.CLUSTER_NAME}}"
+        
+        # Validate cluster name format
+        if [[ ! "{{.CLUSTER_NAME}}" =~ ^[a-z0-9]([a-z0-9-]*[a-z0-9])?$ ]]; then
+          echo "❌ Cluster name must be lowercase alphanumeric with hyphens"
+          exit 1
+        fi
+        
+        if [ ${#{{.CLUSTER_NAME}}} -gt 63 ]; then
+          echo "❌ Cluster name must be 63 characters or less"
+          exit 1
+        fi
+
+  _confirm-cluster-deletion:
+    internal: true
+    vars:
+      CLUSTER_NAME: '{{.CLUSTER_NAME}}'
+      PROVIDER: '{{.PROVIDER}}'
+    cmds:
+      - |
+        echo "⚠️ WARNING This will delete the {{.PROVIDER}} cluster {{.CLUSTER_NAME}}"
+        echo "This action cannot be undone!"
+        echo ""
+        echo -n "Type the cluster name to confirm deletion: "
+        read confirmation
+        if [ "$confirmation" != "{{.CLUSTER_NAME}}" ]; then
+          echo "❌ Confirmation did not match cluster name. Aborting."
+          exit 1
+        fi
+
+  _post-cluster-setup:
+    internal: true
+    vars:
+      PROVIDER: '{{.PROVIDER}}'
+      CLUSTER_NAME: '{{.CLUSTER_NAME}}'
+    cmds:
+      - |
+        echo "🔧 Post-cluster setup for {{.PROVIDER}} cluster {{.CLUSTER_NAME}}"
+        
+        # Update kubeconfig
+        case "{{.PROVIDER}}" in
+          kind)
+            kubectl config use-context kind-{{.CLUSTER_NAME}}
+            ;;
+          aws)
+            if command -v aws >/dev/null 2>&1; then
+              aws eks update-kubeconfig --name {{.CLUSTER_NAME}}
+            fi
+            ;;
+          gcp)
+            if command -v gcloud >/dev/null 2>&1; then
+              gcloud container clusters get-credentials {{.CLUSTER_NAME}}
+            fi
+            ;;
+          azure)
+            if command -v az >/dev/null 2>&1; then
+              az aks get-credentials --resource-group {{.CLUSTER_NAME}}-rg --name {{.CLUSTER_NAME}}
+            fi
+            ;;
+        esac
+        
+        echo "✅ Post-cluster setup complete"
+
+  _switch-context:
+    internal: true
+    vars:
+      CLUSTER_NAME: '{{.CLUSTER_NAME}}'
+      PROVIDER: '{{.PROVIDER}}'
+    cmds:
+      - |
+        case "{{.PROVIDER}}" in
+          kind)
+            kubectl config use-context kind-{{.CLUSTER_NAME}}
+            ;;
+          aws)
+            if command -v aws >/dev/null 2>&1; then
+              aws eks update-kubeconfig --name {{.CLUSTER_NAME}}
+            else
+              echo "❌ AWS CLI not available"
+              exit 1
+            fi
+            ;;
+          gcp)
+            if command -v gcloud >/dev/null 2>&1; then
+              gcloud container clusters get-credentials {{.CLUSTER_NAME}}
+            else
+              echo "❌ gcloud not available"
+              exit 1
+            fi
+            ;;
+          azure)
+            if command -v az >/dev/null 2>&1; then
+              az aks get-credentials --resource-group {{.CLUSTER_NAME}}-rg --name {{.CLUSTER_NAME}}
+            else
+              echo "❌ Azure CLI not available"
+              exit 1
+            fi
+            ;;
+        esac
+        
+        echo "✅ Switched to {{.PROVIDER}} cluster {{.CLUSTER_NAME}}"
+        kubectl config current-context

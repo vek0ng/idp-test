@@ -1,0 +1,468 @@
+version: '3'
+
+# ===============================
+# Local Development Environment
+# ===============================
+
+vars:
+  # Standardized parameters
+  APP_NAME: '{{.APP_NAME | default "sample-go-app"}}'
+  ENVIRONMENT: '{{.ENVIRONMENT | default "local"}}'
+  
+  # Local development configuration
+  LOCAL_PORT: '{{.LOCAL_PORT | default "8080"}}'
+  REGISTRY: '{{.REGISTRY | default "localhost:5000"}}'
+  DEBUG: '{{.DEBUG | default "true"}}'
+
+tasks:
+
+  # ===============================
+  # Local Development Server
+  # ===============================
+
+  run:
+    desc: Run application locally for development
+    vars:
+      APP_NAME: '{{.APP_NAME}}'
+      LOCAL_PORT: '{{.LOCAL_PORT}}'
+      DEBUG: '{{.DEBUG}}'
+    cmds:
+      - echo "🚀 Starting {{.APP_NAME}} locally on port {{.LOCAL_PORT}}"
+      - task: _validate-local-requirements
+        vars:
+          APP_NAME: '{{.APP_NAME}}'
+      - task: _run-local-app
+        vars:
+          APP_NAME: '{{.APP_NAME}}'
+          LOCAL_PORT: '{{.LOCAL_PORT}}'
+          DEBUG: '{{.DEBUG}}'
+
+  run-watch:
+    desc: Run application with auto-reload on file changes
+    vars:
+      APP_NAME: '{{.APP_NAME}}'
+      LOCAL_PORT: '{{.LOCAL_PORT}}'
+    cmds:
+      - echo "👀 Starting {{.APP_NAME}} with auto-reload"
+      - task: _run-with-watch
+        vars:
+          APP_NAME: '{{.APP_NAME}}'
+          LOCAL_PORT: '{{.LOCAL_PORT}}'
+
+  # ===============================
+  # Local Development Setup
+  # ===============================
+
+  setup:
+    desc: Setup local development environment
+    cmds:
+      - echo "🔧 Setting up local development environment"
+      - task: _setup-local-registry
+      - task: _setup-development-tools
+      - task: _verify-local-setup
+      - echo "✅ Local development environment ready"
+
+  setup-database:
+    desc: Setup local development database
+    vars:
+      DB_TYPE: '{{.DB_TYPE | default "postgres"}}'
+      DB_PORT: '{{.DB_PORT | default "5432"}}'
+    cmds:
+      - echo "🗄️ Setting up local {{.DB_TYPE}} database"
+      - task: _setup-local-database
+        vars:
+          DB_TYPE: '{{.DB_TYPE}}'
+          DB_PORT: '{{.DB_PORT}}'
+
+  # ===============================
+  # Local Services Management
+  # ===============================
+
+  start-services:
+    desc: Start local development services (registry, database, etc.)
+    cmds:
+      - echo "🔄 Starting local development services"
+      - task: _start-local-registry
+      - task: _start-local-database
+      - echo "✅ Development services started"
+
+  stop-services:
+    desc: Stop local development services
+    cmds:
+      - echo "🛑 Stopping local development services"
+      - task: _stop-local-services
+      - echo "✅ Development services stopped"
+
+  status-services:
+    desc: Check status of local development services
+    cmds:
+      - echo "📊 Local Development Services Status"
+      - echo "==================================="
+      - task: _check-service-status
+
+  # ===============================
+  # Hot Reload and Live Development
+  # ===============================
+
+  dev:
+    desc: Start full development environment with hot reload
+    vars:
+      APP_NAME: '{{.APP_NAME}}'
+      LOCAL_PORT: '{{.LOCAL_PORT}}'
+    cmds:
+      - echo "🔥 Starting full development environment"
+      - task: start-services
+      - task: run-watch
+        vars:
+          APP_NAME: '{{.APP_NAME}}'
+          LOCAL_PORT: '{{.LOCAL_PORT}}'
+
+  test-local:
+    desc: Run tests in local development mode
+    vars:
+      APP_NAME: '{{.APP_NAME}}'
+    cmds:
+      - echo "🧪 Running tests locally for {{.APP_NAME}}"
+      - |
+        cd apps/{{.APP_NAME}}
+        export DEBUG=true
+        export ENVIRONMENT=local
+        
+        if [ -f "go.mod" ]; then
+          go test -v ./... -tags=local
+        elif [ -f "package.json" ]; then
+          npm run test:local || npm test
+        elif [ -f "requirements.txt" ]; then
+          pytest -v --tb=short
+        fi
+
+  # ===============================
+  # Local Debugging
+  # ===============================
+
+  debug:
+    desc: Start application in debug mode
+    vars:
+      APP_NAME: '{{.APP_NAME}}'
+      DEBUG_PORT: '{{.DEBUG_PORT | default "2345"}}'
+    cmds:
+      - echo "🐛 Starting {{.APP_NAME}} in debug mode"
+      - task: _start-debug-session
+        vars:
+          APP_NAME: '{{.APP_NAME}}'
+          DEBUG_PORT: '{{.DEBUG_PORT}}'
+
+  profile:
+    desc: Start application with profiling enabled
+    vars:
+      APP_NAME: '{{.APP_NAME}}'
+      PROFILE_PORT: '{{.PROFILE_PORT | default "6060"}}'
+    cmds:
+      - echo "📊 Starting {{.APP_NAME}} with profiling"
+      - task: _start-with-profiling
+        vars:
+          APP_NAME: '{{.APP_NAME}}'
+          PROFILE_PORT: '{{.PROFILE_PORT}}'
+
+  # ===============================
+  # Local Environment Utilities
+  # ===============================
+
+  logs:
+    desc: Show local application logs
+    vars:
+      APP_NAME: '{{.APP_NAME}}'
+      LINES: '{{.LINES | default "100"}}'
+    cmds:
+      - echo "📄 Local logs for {{.APP_NAME}}"
+      - |
+        if [ -f "apps/{{.APP_NAME}}/logs/app.log" ]; then
+          tail -n {{.LINES}} apps/{{.APP_NAME}}/logs/app.log
+        else
+          echo "No log file found. Check console output."
+        fi
+
+  clean:
+    desc: Clean local development artifacts
+    vars:
+      APP_NAME: '{{.APP_NAME}}'
+    cmds:
+      - echo "🧹 Cleaning local development artifacts"
+      - |
+        cd apps/{{.APP_NAME}} 2>/dev/null || exit 0
+        
+        # Remove build artifacts
+        rm -rf dist/ build/ target/ __pycache__/
+        rm -f *.log
+        
+        # Clean Go artifacts
+        if [ -f "go.mod" ]; then
+          go clean -cache -modcache -testcache
+        fi
+        
+        # Clean Node.js artifacts
+        if [ -f "package.json" ]; then
+          rm -rf node_modules/.cache/
+        fi
+        
+        echo "✅ Local cleanup complete"
+
+  reset:
+    desc: Reset local development environment
+    cmds:
+      - echo "🔄 Resetting local development environment"
+      - task: stop-services
+      - task: clean
+      - task: setup
+      - echo "✅ Local environment reset complete"
+
+  # ===============================
+  # Internal Helper Tasks
+  # ===============================
+
+  _validate-local-requirements:
+    internal: true
+    vars:
+      APP_NAME: '{{.APP_NAME}}'
+    cmds:
+      - |
+        # Check if app directory exists
+        if [ ! -d "apps/{{.APP_NAME}}" ]; then
+          echo "❌ Application directory not found apps/{{.APP_NAME}}"
+          exit 1
+        fi
+        
+        # Check Docker for services
+        if ! command -v docker >/dev/null 2>&1; then
+          echo "⚠️ Docker not installed - some services may not work"
+        fi
+        
+        echo "✅ Local requirements validated"
+
+  _run-local-app:
+    internal: true
+    vars:
+      APP_NAME: '{{.APP_NAME}}'
+      LOCAL_PORT: '{{.LOCAL_PORT}}'
+      DEBUG: '{{.DEBUG}}'
+    cmds:
+      - |
+        cd apps/{{.APP_NAME}}
+        export PORT={{.LOCAL_PORT}}
+        export DEBUG={{.DEBUG}}
+        export ENVIRONMENT=local
+        
+        if [ -f "go.mod" ]; then
+          # Go application
+          go run .
+        elif [ -f "package.json" ]; then
+          # Node.js application
+          npm start
+        elif [ -f "requirements.txt" ] || [ -f "pyproject.toml" ]; then
+          # Python application
+          python app.py || python main.py
+        else
+          echo "❌ No supported application type found"
+          exit 1
+        fi
+
+  _run-with-watch:
+    internal: true
+    vars:
+      APP_NAME: '{{.APP_NAME}}'
+      LOCAL_PORT: '{{.LOCAL_PORT}}'
+    cmds:
+      - |
+        cd apps/{{.APP_NAME}}
+        export PORT={{.LOCAL_PORT}}
+        export DEBUG=true
+        export ENVIRONMENT=local
+        
+        if [ -f "go.mod" ]; then
+          # Use air for Go hot reload if available
+          if command -v air >/dev/null 2>&1; then
+            air
+          else
+            echo "Install 'air' for hot reload: go install github.com/cosmtrek/air@latest"
+            go run .
+          fi
+        elif [ -f "package.json" ]; then
+          # Use nodemon for Node.js if available
+          if command -v nodemon >/dev/null 2>&1; then
+            nodemon
+          else
+            npm run dev || npm start
+          fi
+        else
+          echo "⚠️ Hot reload not supported for this application type"
+          task local:run APP_NAME={{.APP_NAME}}
+        fi
+
+  _setup-local-registry:
+    internal: true
+    cmds:
+      - |
+        echo "🐳 Setting up local container registry"
+        if ! docker ps | grep -q "registry:2"; then
+          docker run -d -p 5000:5000 --restart=always --name local-registry registry:2 2>/dev/null || echo "Registry already running"
+        fi
+        echo "✅ Local registry ready at localhost:5000"
+
+  _setup-development-tools:
+    internal: true
+    cmds:
+      - |
+        echo "🛠️ Checking development tools"
+        
+        # Check for Go tools
+        if command -v go >/dev/null 2>&1; then
+          echo "✅ Go development environment"
+          # Install useful Go tools if not present
+          if ! command -v air >/dev/null 2>&1; then
+            echo "📦 Installing air for hot reload..."
+            go install github.com/cosmtrek/air@latest 2>/dev/null || echo "Failed to install air"
+          fi
+        fi
+        
+        # Check for Node.js tools
+        if command -v npm >/dev/null 2>&1; then
+          echo "✅ Node.js development environment"
+        fi
+        
+        # Check for Python tools
+        if command -v python >/dev/null 2>&1; then
+          echo "✅ Python development environment"
+        fi
+
+  _verify-local-setup:
+    internal: true
+    cmds:
+      - |
+        echo "🔍 Verifying local setup"
+        
+        # Check Docker
+        if docker ps >/dev/null 2>&1; then
+          echo "✅ Docker is running"
+        else
+          echo "⚠️ Docker is not running"
+        fi
+        
+        # Check local registry
+        if curl -s http://localhost:5000/v2/ >/dev/null 2>&1; then
+          echo "✅ Local registry is accessible"
+        else
+          echo "⚠️ Local registry is not accessible"
+        fi
+
+  _setup-local-database:
+    internal: true
+    vars:
+      DB_TYPE: '{{.DB_TYPE}}'
+      DB_PORT: '{{.DB_PORT}}'
+    cmds:
+      - |
+        case "{{.DB_TYPE}}" in
+          "postgres")
+            echo "🐘 Starting PostgreSQL database"
+            docker run -d --name local-postgres \
+              -e POSTGRES_PASSWORD=dev123 \
+              -e POSTGRES_USER=dev \
+              -e POSTGRES_DB=devdb \
+              -p {{.DB_PORT}}:5432 \
+              postgres:13-alpine 2>/dev/null || echo "PostgreSQL already running"
+            ;;
+          "mysql")
+            echo "🐬 Starting MySQL database"
+            docker run -d --name local-mysql \
+              -e MYSQL_ROOT_PASSWORD=dev123 \
+              -e MYSQL_DATABASE=devdb \
+              -p {{.DB_PORT}}:3306 \
+              mysql:8 2>/dev/null || echo "MySQL already running"
+            ;;
+          *)
+            echo "⚠️ Database type {{.DB_TYPE}} not supported"
+            ;;
+        esac
+
+  _start-local-registry:
+    internal: true
+    cmds:
+      - |
+        if ! docker ps | grep -q "local-registry"; then
+          docker start local-registry 2>/dev/null || task local:_setup-local-registry
+        fi
+
+  _start-local-database:
+    internal: true
+    cmds:
+      - |
+        # Start PostgreSQL if exists
+        docker start local-postgres 2>/dev/null || echo "No local PostgreSQL container"
+        
+        # Start MySQL if exists  
+        docker start local-mysql 2>/dev/null || echo "No local MySQL container"
+
+  _stop-local-services:
+    internal: true
+    cmds:
+      - |
+        echo "Stopping local services..."
+        docker stop local-registry 2>/dev/null || echo "No registry to stop"
+        docker stop local-postgres 2>/dev/null || echo "No PostgreSQL to stop"
+        docker stop local-mysql 2>/dev/null || echo "No MySQL to stop"
+
+  _check-service-status:
+    internal: true
+    cmds:
+      - |
+        echo "Registry:"
+        if docker ps | grep -q "local-registry"; then
+          echo "  ✅ Running on localhost:5000"
+        else
+          echo "  ❌ Not running"
+        fi
+        
+        echo "PostgreSQL:"
+        if docker ps | grep -q "local-postgres"; then
+          echo "  ✅ Running on localhost:5432"
+        else
+          echo "  ❌ Not running"
+        fi
+        
+        echo "MySQL:"
+        if docker ps | grep -q "local-mysql"; then
+          echo "  ✅ Running on localhost:3306"
+        else
+          echo "  ❌ Not running"
+        fi
+
+  _start-debug-session:
+    internal: true
+    vars:
+      APP_NAME: '{{.APP_NAME}}'
+      DEBUG_PORT: '{{.DEBUG_PORT}}'
+    cmds:
+      - |
+        cd apps/{{.APP_NAME}}
+        if [ -f "go.mod" ]; then
+          echo "Starting Go debugging session on port {{.DEBUG_PORT}}"
+          if command -v dlv >/dev/null 2>&1; then
+            dlv debug --headless --listen=:{{.DEBUG_PORT}} --api-version=2
+          else
+            echo "Install delve: go install github.com/go-delve/delve/cmd/dlv@latest"
+          fi
+        else
+          echo "Debugging not implemented for this application type"
+        fi
+
+  _start-with-profiling:
+    internal: true
+    vars:
+      APP_NAME: '{{.APP_NAME}}'
+      PROFILE_PORT: '{{.PROFILE_PORT}}'
+    cmds:
+      - |
+        cd apps/{{.APP_NAME}}
+        export PROFILE_PORT={{.PROFILE_PORT}}
+        echo "Profiling available at http://localhost {{.PROFILE_PORT}}/debug/pprof/"
+        task local:run APP_NAME={{.APP_NAME}}

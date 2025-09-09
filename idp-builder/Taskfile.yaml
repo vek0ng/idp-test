@@ -1,0 +1,346 @@
+version: '3'
+
+# ===============================
+# IDP Builder - Platform Setup and Management
+# ===============================
+
+vars:
+  # Platform Configuration
+  CLUSTER_NAME: '{{.CLUSTER_NAME | default "idp-cluster"}}'
+  PROVIDER: '{{.PROVIDER | default "kind"}}'
+  ENVIRONMENT: '{{.ENVIRONMENT | default "dev"}}'
+  REGION: '{{.REGION | default "ap-southeast-1"}}'
+
+env:
+  # Platform environment variables
+  GITHUB_USER:
+    sh: echo "${GITHUB_USER}"
+  GITHUB_TOKEN:
+    sh: echo "${GITHUB_TOKEN}"
+  PROJECT_ID:
+    sh: echo "${PROJECT_ID}"
+  DEBUG:
+    sh: echo "${DEBUG:-false}"
+
+# ===============================
+# Modular Taskfile Includes
+# ===============================
+
+includes:
+  # Core Infrastructure
+  environment: ./taskfiles/core/environment.yaml
+  prerequisites: ./taskfiles/core/prerequisites.yaml
+  providers: ./taskfiles/core/providers.yaml
+  
+  # Infrastructure Layer
+  cluster: ./taskfiles/infrastructure/cluster.yaml
+  networking: ./taskfiles/infrastructure/networking.yaml
+  storage: ./taskfiles/infrastructure/storage.yaml
+  
+  # Platform Layer
+  gitops: ./taskfiles/platform/gitops.yaml
+  crossplane: ./taskfiles/platform/crossplane.yaml
+  backstage: ./taskfiles/platform/backstage.yaml
+  
+  # Workflow Integration
+  workflows: ./taskfiles/workflows/
+
+# ===============================
+# Task Definitions
+# ===============================
+
+tasks:
+  default:
+    desc: Show help and available commands
+    aliases: [help, list]
+    cmds:
+      - task: _show-help
+
+  # ===============================
+  # Core Infrastructure Tasks
+  # ===============================
+
+  check-prerequisites:
+    desc: Check all prerequisites for IDP platform setup
+    aliases: [check-prereqs, prereqs]
+    vars:
+      PROVIDER: '{{.PROVIDER}}'
+      ENVIRONMENT: '{{.ENVIRONMENT}}'
+    cmds:
+      - task: prerequisites:check-prerequisites
+        vars:
+          PROVIDER: '{{.PROVIDER}}'
+          ENVIRONMENT: '{{.ENVIRONMENT}}'
+
+  setup-environment:
+    desc: Setup and validate environment configuration
+    aliases: [setup-env, env]
+    vars:
+      CLUSTER_NAME: '{{.CLUSTER_NAME}}'
+      PROVIDER: '{{.PROVIDER}}'
+      ENVIRONMENT: '{{.ENVIRONMENT}}'
+      REGION: '{{.REGION}}'
+    cmds:
+      - task: environment:validate
+        vars:
+          CLUSTER_NAME: '{{.CLUSTER_NAME}}'
+          PROVIDER: '{{.PROVIDER}}'
+          ENVIRONMENT: '{{.ENVIRONMENT}}'
+          REGION: '{{.REGION}}'
+      - task: environment:show-config
+
+  configure-provider:
+    desc: Configure cloud provider settings
+    aliases: [setup-provider, provider]
+    vars:
+      PROVIDER: '{{.PROVIDER}}'
+    cmds:
+      - task: providers:set-provider
+        vars:
+          PROVIDER: '{{.PROVIDER}}'
+      - task: providers:validate-provider
+        vars:
+          PROVIDER: '{{.PROVIDER}}'
+
+  # ===============================
+  # Infrastructure Management Tasks  
+  # ===============================
+
+  create-cluster:
+    desc: Create Kubernetes cluster (CLUSTER_NAME and PROVIDER required)
+    vars:
+      CLUSTER_NAME: '{{.CLUSTER_NAME}}'
+      PROVIDER: '{{.PROVIDER}}'
+      ENVIRONMENT: '{{.ENVIRONMENT}}'
+      REGION: '{{.REGION}}'
+    cmds:
+      - task: cluster:create-cluster
+        vars:
+          CLUSTER_NAME: '{{.CLUSTER_NAME}}'
+          PROVIDER: '{{.PROVIDER}}'
+          ENVIRONMENT: '{{.ENVIRONMENT}}'
+          REGION: '{{.REGION}}'
+
+  setup-networking:
+    desc: Setup networking and ingress for the cluster
+    vars:
+      PROVIDER: '{{.PROVIDER}}'
+      INGRESS_CLASS: '{{.INGRESS_CLASS | default "nginx"}}'
+    cmds:
+      - task: networking:install-ingress
+        vars:
+          PROVIDER: '{{.PROVIDER}}'
+          INGRESS_CLASS: '{{.INGRESS_CLASS}}'
+
+  setup-storage:
+    desc: Setup storage classes and persistent volumes
+    vars:
+      PROVIDER: '{{.PROVIDER}}'
+      ENVIRONMENT: '{{.ENVIRONMENT}}'
+    cmds:
+      - task: storage:setup-storage
+        vars:
+          PROVIDER: '{{.PROVIDER}}'
+          ENVIRONMENT: '{{.ENVIRONMENT}}'
+
+  # ===============================
+  # Platform Management Tasks
+  # ===============================
+
+  install-gitops:
+    desc: Install ArgoCD GitOps platform
+    aliases: [install-argocd]
+    vars:
+      CLUSTER_NAME: '{{.CLUSTER_NAME}}'
+      PROVIDER: '{{.PROVIDER}}'
+      NAMESPACE: '{{.NAMESPACE | default "argocd"}}'
+    cmds:
+      - task: gitops:install-argocd
+        vars:
+          CLUSTER_NAME: '{{.CLUSTER_NAME}}'
+          PROVIDER: '{{.PROVIDER}}'
+          NAMESPACE: '{{.NAMESPACE}}'
+
+  install-crossplane:
+    desc: Install Crossplane Infrastructure as Code platform
+    aliases: [install-iac]
+    vars:
+      CLUSTER_NAME: '{{.CLUSTER_NAME}}'
+      PROVIDER: '{{.PROVIDER}}'
+      NAMESPACE: '{{.NAMESPACE | default "crossplane-system"}}'
+    cmds:
+      - task: crossplane:install-crossplane
+        vars:
+          CLUSTER_NAME: '{{.CLUSTER_NAME}}'
+          PROVIDER: '{{.PROVIDER}}'
+          NAMESPACE: '{{.NAMESPACE}}'
+
+  install-backstage:
+    desc: Install Backstage Developer Portal
+    aliases: [install-portal]
+    vars:
+      CLUSTER_NAME: '{{.CLUSTER_NAME}}'
+      PROVIDER: '{{.PROVIDER}}'
+      NAMESPACE: '{{.NAMESPACE | default "backstage"}}'
+    cmds:
+      - task: backstage:install-backstage
+        vars:
+          CLUSTER_NAME: '{{.CLUSTER_NAME}}'
+          PROVIDER: '{{.PROVIDER}}'
+          NAMESPACE: '{{.NAMESPACE}}'
+
+  install-all-platforms:
+    desc: Install all platform components (ArgoCD, Crossplane, Backstage)
+    vars:
+      CLUSTER_NAME: '{{.CLUSTER_NAME}}'
+      PROVIDER: '{{.PROVIDER}}'
+    cmds:
+      - echo "🚀 Installing all platform components for cluster {{.CLUSTER_NAME}}"
+      - echo "========================================================="
+      - task: install-gitops
+        vars:
+          CLUSTER_NAME: '{{.CLUSTER_NAME}}'
+          PROVIDER: '{{.PROVIDER}}'
+      - task: install-crossplane
+        vars:
+          CLUSTER_NAME: '{{.CLUSTER_NAME}}'
+          PROVIDER: '{{.PROVIDER}}'
+      - task: install-backstage
+        vars:
+          CLUSTER_NAME: '{{.CLUSTER_NAME}}'
+          PROVIDER: '{{.PROVIDER}}'
+      - echo ""
+      - echo "✅ All platform components installed successfully!"
+      - echo "ArgoCD GitOps kubectl port-forward svc/argocd-server -n argocd 8080:443"
+      - echo "Backstage Portal kubectl port-forward svc/backstage -n backstage 3000:80"
+
+  # ===============================
+  # Quick Setup Workflows
+  # ===============================
+
+  quick-setup:
+    desc: Quick setup for development - creates complete infrastructure stack
+    vars:
+      CLUSTER_NAME: '{{.CLUSTER_NAME | default "quick-demo"}}'
+      PROVIDER: '{{.PROVIDER | default "kind"}}'
+      ENVIRONMENT: '{{.ENVIRONMENT | default "dev"}}'
+    cmds:
+      - echo "🚀 Quick Setup for {{.PROVIDER}} provider"
+      - echo "================================="
+      - echo "Creating complete infrastructure stack..."
+      - echo ""
+      - task: check-prerequisites
+        vars:
+          PROVIDER: '{{.PROVIDER}}'
+      - task: create-cluster
+        vars:
+          CLUSTER_NAME: '{{.CLUSTER_NAME}}'
+          PROVIDER: '{{.PROVIDER}}'
+          ENVIRONMENT: '{{.ENVIRONMENT}}'
+      - task: setup-networking
+        vars:
+          PROVIDER: '{{.PROVIDER}}'
+      - task: setup-storage
+        vars:
+          PROVIDER: '{{.PROVIDER}}'
+          ENVIRONMENT: '{{.ENVIRONMENT}}'
+      - echo ""
+      - echo "✅ Quick setup complete!"
+      - echo "Cluster {{.CLUSTER_NAME}} is ready for platform installation (Phase 3)"
+
+  validate-structure:
+    desc: Validate the directory structure
+    cmds:
+      - echo "🔍 Validating IDP Builder directory structure..."
+      - |
+        required_dirs=("taskfiles" "configs" "scripts" "examples" "docs")
+        for dir in "${required_dirs[@]}"; do
+          if [ -d "$dir" ]; then
+            echo "✅ $dir/ directory exists"
+          else
+            echo "❌ $dir/ directory missing"
+            exit 1
+          fi
+        done
+      - echo "🎉 Directory structure validation passed!"
+
+  version:
+    desc: Show IDP Builder version and configuration
+    cmds:
+      - |
+        echo "IDP Builder v1.0.0"
+        echo "Platform: {{.PROVIDER}}"
+        echo "Environment: {{.ENVIRONMENT}}"
+        echo "Cluster: {{.CLUSTER_NAME}}"
+        echo "Region: {{.REGION}}"
+
+  # Internal Helper Tasks
+  _show-help:
+    desc: Show comprehensive help information
+    silent: true
+    cmds:
+      - |
+        cat << 'EOF'
+        ╭─────────────────────────────────────────────────────────────────────────────────╮
+        │                    IDP Builder - Platform Setup & Management                    │
+        ╰─────────────────────────────────────────────────────────────────────────────────╯
+        
+        🏗️ CORE INFRASTRUCTURE:
+          task check-prerequisites     - Check all prerequisites for platform setup
+          task setup-environment       - Setup and validate environment configuration
+          task configure-provider      - Configure cloud provider settings
+          
+        ☸️ CLUSTER MANAGEMENT:
+          task create-cluster          - Create Kubernetes cluster
+          task cluster:delete-cluster  - Delete Kubernetes cluster
+          task cluster:list-clusters   - List all clusters
+          task cluster:cluster-status  - Show current cluster status
+          
+        🌐 INFRASTRUCTURE SETUP:
+          task setup-networking        - Setup ingress and networking
+          task setup-storage           - Setup storage classes and volumes
+          
+        🚀 PLATFORM COMPONENTS:
+          task install-gitops          - Install ArgoCD GitOps platform
+          task install-crossplane      - Install Crossplane Infrastructure as Code
+          task install-backstage       - Install Backstage Developer Portal
+          task install-all-platforms   - Install all platform components
+          
+        🚀 QUICK WORKFLOWS:
+          task quick-setup             - Complete infrastructure setup for development
+          task help                    - Show this help
+          task validate-structure      - Validate directory structure
+          task version                 - Show version and configuration
+          
+        � DETAILED TASK GROUPS:
+          task environment:help        - Environment configuration tasks
+          task prerequisites:help      - Prerequisites management tasks
+          task providers:help          - Cloud provider configuration tasks
+          task cluster:help            - Cluster management tasks
+          task networking:help         - Networking and ingress tasks
+          task storage:help            - Storage management tasks
+          
+        📋 CURRENT CONFIGURATION:
+          Provider: {{.PROVIDER}}
+          Environment: {{.ENVIRONMENT}}
+          Cluster: {{.CLUSTER_NAME}}
+          Region: {{.REGION}}
+          
+        💡 USAGE EXAMPLES:
+          task quick-setup PROVIDER=kind CLUSTER_NAME=dev-cluster
+          task create-cluster CLUSTER_NAME=prod-cluster PROVIDER=aws REGION=ap-southeast-2
+          task install-gitops CLUSTER_NAME=my-cluster NAMESPACE=argocd
+          task install-crossplane PROVIDER=aws CLUSTER_NAME=my-cluster
+          task install-backstage DOMAIN=backstage.example.com
+          task install-all-platforms CLUSTER_NAME=complete-stack
+          
+        🔧 Phase 3 Status: Platform Layer Migration ✅
+        
+        Available providers: kind, aws, gcp, azure
+        Available environments: dev, staging, production
+        
+        Next phases will add:
+        - Application lifecycle management and workflows (Phase 4)
+        - Advanced configurations and integrations (Phase 5) 
+        - Complete documentation and production examples (Phase 6)
+        EOF

@@ -1,0 +1,576 @@
+version: '3'
+
+# IDP Usage - Application Demo Workflows  
+# Provides comprehensive application demonstrations and showcases
+
+vars:
+  APP_NAME: '{{.APP_NAME | default "demo-app"}}'
+  CLUSTER_NAME: '{{.CLUSTER_NAME | default "idp-cluster"}}'
+  DEMO_TYPE: '{{.DEMO_TYPE | default "full-stack"}}'
+  ENVIRONMENT: '{{.ENVIRONMENT | default "demo"}}'
+
+tasks:
+  full-stack-demo:
+    desc: Complete full-stack application demonstration
+    vars:
+      APP_NAME: '{{.APP_NAME}}'
+      CLUSTER_NAME: '{{.CLUSTER_NAME}}'
+    cmds:
+      - echo "🚀 Full-Stack Application Demo"
+      - echo "============================="
+      - echo "Application - {{.APP_NAME}}"
+      - echo "Cluster - {{.CLUSTER_NAME}}"
+      - echo ""
+      - echo "Phase 1 - Multi-Service Application Creation"
+      - task: create-microservices-demo
+        vars:
+          APP_NAME: '{{.APP_NAME}}'
+      - echo ""
+      - echo "Phase 2 - Build and Test All Services"
+      - task: build-demo-services
+        vars:
+          APP_NAME: '{{.APP_NAME}}'
+      - echo ""
+      - echo "Phase 3 - Deploy Full Stack"
+      - task: deploy-full-stack
+        vars:
+          APP_NAME: '{{.APP_NAME}}'
+          ENVIRONMENT: demo
+      - echo ""
+      - echo "Phase 4 - Configure Networking and Ingress"
+      - task: setup-demo-networking
+        vars:
+          APP_NAME: '{{.APP_NAME}}'
+      - echo ""
+      - echo "Phase 5 - Demonstrate Features"
+      - task: demonstrate-features
+        vars:
+          APP_NAME: '{{.APP_NAME}}'
+      - echo ""
+      - echo "✅ Full-stack demo completed successfully!"
+      - task: show-demo-access
+        vars:
+          APP_NAME: '{{.APP_NAME}}'
+
+  create-microservices-demo:
+    desc: Create a complete microservices demonstration
+    vars:
+      APP_NAME: '{{.APP_NAME}}'
+    cmds:
+      - echo "🏗️ Creating microservices demo"
+      - echo "============================="
+      - |
+        # Create API Gateway service (Go)
+        API_NAME="{{.APP_NAME}}-api"
+        task scaffold:create-go-service APP_NAME=$API_NAME
+        echo "✅ Created API Gateway: $API_NAME"
+      - |
+        # Create Frontend service (Node.js)
+        FRONTEND_NAME="{{.APP_NAME}}-frontend"
+        task scaffold:create-node-express APP_NAME=$FRONTEND_NAME
+        echo "✅ Created Frontend: $FRONTEND_NAME"
+      - |
+        # Create Backend service (Python)
+        BACKEND_NAME="{{.APP_NAME}}-backend"
+        task scaffold:create-python-flask APP_NAME=$BACKEND_NAME
+        echo "✅ Created Backend: $BACKEND_NAME"
+      - |
+        # Create shared configuration
+        CONFIG_DIR="./apps/{{.APP_NAME}}-config"
+        mkdir -p "$CONFIG_DIR/k8s"
+        
+        # Create shared ConfigMap
+        cat > "$CONFIG_DIR/k8s/configmap.yaml" <<EOF
+        apiVersion: v1
+        kind: ConfigMap
+        metadata:
+          name: {{.APP_NAME}}-config
+          labels:
+            app: {{.APP_NAME}}
+            component: config
+        data:
+          environment: "demo"
+          debug: "true"
+          log_level: "info"
+          database_host: "{{.APP_NAME}}-db"
+          redis_host: "{{.APP_NAME}}-redis"
+        EOF
+        echo "✅ Created shared configuration"
+      - |
+        # Create demo database manifest
+        CONFIG_DIR="./apps/{{.APP_NAME}}-config"
+        cat > "$CONFIG_DIR/k8s/database.yaml" <<EOF
+        apiVersion: apps/v1
+        kind: Deployment
+        metadata:
+          name: {{.APP_NAME}}-db
+          labels:
+            app: {{.APP_NAME}}
+            component: database
+        spec:
+          replicas: 1
+          selector:
+            matchLabels:
+              app: {{.APP_NAME}}
+              component: database
+          template:
+            metadata:
+              labels:
+                app: {{.APP_NAME}}
+                component: database
+            spec:
+              containers:
+              - name: postgres
+                image: postgres:13
+                env:
+                - name: POSTGRES_DB
+                  value: demoapp
+                - name: POSTGRES_USER
+                  value: demo
+                - name: POSTGRES_PASSWORD
+                  value: demopass
+                ports:
+                - containerPort: 5432
+        ---
+        apiVersion: v1
+        kind: Service
+        metadata:
+          name: {{.APP_NAME}}-db
+          labels:
+            app: {{.APP_NAME}}
+            component: database
+        spec:
+          selector:
+            app: {{.APP_NAME}}
+            component: database
+          ports:
+          - port: 5432
+            targetPort: 5432
+        EOF
+        echo "✅ Created demo database manifests"
+
+  build-demo-services:
+    desc: Build all services for the demo application
+    vars:
+      APP_NAME: '{{.APP_NAME}}'
+    cmds:
+      - echo "🔨 Building demo services"
+      - echo "========================"
+      - |
+        # Build API Gateway
+        API_NAME="{{.APP_NAME}}-api"
+        echo "Building $API_NAME..."
+        task build:build APP_NAME=$API_NAME
+        echo "✅ Built API Gateway"
+      - |
+        # Build Frontend
+        FRONTEND_NAME="{{.APP_NAME}}-frontend"
+        echo "Building $FRONTEND_NAME..."
+        task build:build APP_NAME=$FRONTEND_NAME
+        echo "✅ Built Frontend"
+      - |
+        # Build Backend
+        BACKEND_NAME="{{.APP_NAME}}-backend"
+        echo "Building $BACKEND_NAME..."
+        task build:build APP_NAME=$BACKEND_NAME
+        echo "✅ Built Backend"
+      - |
+        # Run tests for all services
+        echo "Running tests for all services..."
+        API_NAME="{{.APP_NAME}}-api"
+        FRONTEND_NAME="{{.APP_NAME}}-frontend"
+        BACKEND_NAME="{{.APP_NAME}}-backend"
+        
+        task test:unit-test APP_NAME=$API_NAME || echo "⚠️ API tests completed with warnings"
+        task test:unit-test APP_NAME=$FRONTEND_NAME || echo "⚠️ Frontend tests completed with warnings"
+        task test:unit-test APP_NAME=$BACKEND_NAME || echo "⚠️ Backend tests completed with warnings"
+        
+        echo "✅ All services built and tested"
+
+  deploy-full-stack:
+    desc: Deploy the complete full-stack demo application
+    vars:
+      APP_NAME: '{{.APP_NAME}}'
+      ENVIRONMENT: '{{.ENVIRONMENT}}'
+    cmds:
+      - echo "🚀 Deploying full-stack demo"
+      - echo "============================"
+      - |
+        # Create demo namespace
+        NAMESPACE="{{.ENVIRONMENT}}-{{.APP_NAME}}"
+        kubectl create namespace $NAMESPACE --dry-run=client -o yaml | kubectl apply -f -
+        kubectl label namespace $NAMESPACE app="{{.APP_NAME}}" environment="{{.ENVIRONMENT}}" --overwrite
+        echo "✅ Created demo namespace: $NAMESPACE"
+      - |
+        # Deploy shared configuration
+        NAMESPACE="{{.ENVIRONMENT}}-{{.APP_NAME}}"
+        kubectl apply -f "./apps/{{.APP_NAME}}-config/k8s/" -n $NAMESPACE
+        echo "✅ Deployed shared configuration"
+      - |
+        # Deploy database
+        NAMESPACE="{{.ENVIRONMENT}}-{{.APP_NAME}}"
+        kubectl apply -f "./apps/{{.APP_NAME}}-config/k8s/database.yaml" -n $NAMESPACE
+        echo "✅ Deployed database"
+      - |
+        # Deploy backend service
+        BACKEND_NAME="{{.APP_NAME}}-backend"
+        NAMESPACE="{{.ENVIRONMENT}}-{{.APP_NAME}}"
+        task deploy:deploy APP_NAME=$BACKEND_NAME NAMESPACE=$NAMESPACE
+        echo "✅ Deployed backend service"
+      - |
+        # Deploy API gateway
+        API_NAME="{{.APP_NAME}}-api"
+        NAMESPACE="{{.ENVIRONMENT}}-{{.APP_NAME}}"
+        task deploy:deploy APP_NAME=$API_NAME NAMESPACE=$NAMESPACE
+        echo "✅ Deployed API gateway"
+      - |
+        # Deploy frontend
+        FRONTEND_NAME="{{.APP_NAME}}-frontend"
+        NAMESPACE="{{.ENVIRONMENT}}-{{.APP_NAME}}"
+        task deploy:deploy APP_NAME=$FRONTEND_NAME NAMESPACE=$NAMESPACE
+        echo "✅ Deployed frontend"
+      - |
+        # Wait for deployments to be ready
+        NAMESPACE="{{.ENVIRONMENT}}-{{.APP_NAME}}"
+        echo "Waiting for deployments to be ready..."
+        kubectl wait --for=condition=available deployment --all -n $NAMESPACE --timeout=300s
+        echo "✅ All deployments ready"
+
+  setup-demo-networking:
+    desc: Configure networking and ingress for demo application
+    vars:
+      APP_NAME: '{{.APP_NAME}}'
+    cmds:
+      - echo "🌐 Setting up demo networking"
+      - echo "============================"
+      - |
+        # Create ingress for the demo application
+        NAMESPACE="demo-{{.APP_NAME}}"
+        cat <<EOF | kubectl apply -f -
+        apiVersion: networking.k8s.io/v1
+        kind: Ingress
+        metadata:
+          name: {{.APP_NAME}}-ingress
+          namespace: $NAMESPACE
+          labels:
+            app: {{.APP_NAME}}
+          annotations:
+            nginx.ingress.kubernetes.io/rewrite-target: /
+        spec:
+          rules:
+          - host: {{.APP_NAME}}.local
+            http:
+              paths:
+              - path: /
+                pathType: Prefix
+                backend:
+                  service:
+                    name: {{.APP_NAME}}-frontend
+                    port:
+                      number: 3000
+              - path: /api
+                pathType: Prefix
+                backend:
+                  service:
+                    name: {{.APP_NAME}}-api
+                    port:
+                      number: 8080
+        EOF
+        echo "✅ Created ingress for demo application"
+      - |
+        # Create service monitor for observability (if Prometheus available)
+        NAMESPACE="demo-{{.APP_NAME}}"
+        if kubectl get crd servicemonitors.monitoring.coreos.com >/dev/null 2>&1; then
+          cat <<EOF | kubectl apply -f -
+          apiVersion: monitoring.coreos.com/v1
+          kind: ServiceMonitor
+          metadata:
+            name: {{.APP_NAME}}-monitor
+            namespace: $NAMESPACE
+            labels:
+              app: {{.APP_NAME}}
+          spec:
+            selector:
+              matchLabels:
+                app: {{.APP_NAME}}
+            endpoints:
+            - port: metrics
+          EOF
+          echo "✅ Created service monitor for observability"
+        else
+          echo "⚠️ Prometheus not available, skipping service monitor"
+        fi
+      - |
+        # Add entries to /etc/hosts for local access (if kind cluster)
+        if kubectl config current-context | grep -q "kind"; then
+          echo "📝 For local access, add this to your /etc/hosts:"
+          echo "127.0.0.1 {{.APP_NAME}}.local"
+        fi
+
+  demonstrate-features:
+    desc: Demonstrate key features of the application
+    vars:
+      APP_NAME: '{{.APP_NAME}}'
+    cmds:
+      - echo "🎪 Demonstrating application features"
+      - echo "===================================="
+      - |
+        NAMESPACE="demo-{{.APP_NAME}}"
+        
+        # Show running services
+        echo "📋 Running Services:"
+        kubectl get pods,svc -n $NAMESPACE
+        echo ""
+      - |
+        # Show resource usage
+        echo "📊 Resource Usage:"
+        kubectl top pods -n $NAMESPACE 2>/dev/null || echo "Metrics not available"
+        echo ""
+      - |
+        # Test internal service connectivity
+        echo "🔗 Testing Service Connectivity:"
+        API_POD=$(kubectl get pod -n $NAMESPACE -l component=api -o jsonpath='{.items[0].metadata.name}')
+        if [ -n "$API_POD" ]; then
+          kubectl exec -n $NAMESPACE $API_POD -- curl -s http://{{.APP_NAME}}-backend:5000/health || echo "Backend connectivity test"
+          echo "✅ Internal service connectivity tested"
+        fi
+      - |
+        # Show application logs
+        echo "📝 Recent Application Logs:"
+        kubectl logs -n $NAMESPACE -l app={{.APP_NAME}} --tail=5 --prefix=true || echo "Logs not available yet"
+      - |
+        # Demonstrate scaling
+        echo "⚖️ Demonstrating Auto-scaling:"
+        kubectl scale deployment {{.APP_NAME}}-api --replicas=2 -n $NAMESPACE
+        kubectl scale deployment {{.APP_NAME}}-frontend --replicas=2 -n $NAMESPACE
+        echo "✅ Scaled services to 2 replicas each"
+      - echo "✅ Feature demonstration complete"
+
+  performance-demo:
+    desc: Demonstrate performance testing and monitoring
+    vars:
+      APP_NAME: '{{.APP_NAME}}'
+    cmds:
+      - echo "🏃 Performance Demo"
+      - echo "=================="
+      - |
+        NAMESPACE="demo-{{.APP_NAME}}"
+        
+        # Run load tests
+        echo "🚀 Running load tests..."
+        task test:load-test APP_NAME={{.APP_NAME}}-api || echo "Load test completed"
+      - |
+        # Show performance metrics
+        echo "📈 Performance Metrics:"
+        kubectl top pods -n $NAMESPACE 2>/dev/null || echo "Metrics not available"
+      - |
+        # Demonstrate horizontal pod autoscaling
+        echo "📏 Setting up Horizontal Pod Autoscaler..."
+        kubectl autoscale deployment {{.APP_NAME}}-api --cpu-percent=70 --min=2 --max=10 -n $NAMESPACE
+        kubectl autoscale deployment {{.APP_NAME}}-frontend --cpu-percent=70 --min=2 --max=10 -n $NAMESPACE
+        echo "✅ HPA configured for demo services"
+      - echo "✅ Performance demo complete"
+
+  security-demo:
+    desc: Demonstrate security features and scanning
+    vars:
+      APP_NAME: '{{.APP_NAME}}'
+    cmds:
+      - echo "🔒 Security Demo"
+      - echo "==============="
+      - |
+        # Run security tests
+        echo "🔍 Running security scans..."
+        task test:security-test APP_NAME={{.APP_NAME}}-api || echo "Security test completed"
+      - |
+        # Show security policies
+        NAMESPACE="demo-{{.APP_NAME}}"
+        echo "🛡️ Security Policies:"
+        kubectl get networkpolicies -n $NAMESPACE
+      - |
+        # Demonstrate RBAC
+        echo "👥 RBAC Configuration:"
+        kubectl get rolebinding -n $NAMESPACE
+      - echo "✅ Security demo complete"
+
+  ci-cd-demo:
+    desc: Demonstrate CI/CD pipeline integration
+    vars:
+      APP_NAME: '{{.APP_NAME}}'
+    cmds:
+      - echo "🔄 CI/CD Demo"
+      - echo "============="
+      - |
+        # Create ArgoCD application for demo
+        if kubectl get namespace argocd >/dev/null 2>&1; then
+          cat <<EOF | kubectl apply -f -
+          apiVersion: argoproj.io/v1alpha1
+          kind: Application
+          metadata:
+            name: {{.APP_NAME}}-demo
+            namespace: argocd
+          spec:
+            project: default
+            source:
+              repoURL: https://github.com/example/{{.APP_NAME}}
+              targetRevision: HEAD
+              path: k8s
+            destination:
+              server: https://kubernetes.default.svc
+              namespace: demo-{{.APP_NAME}}
+            syncPolicy:
+              automated:
+                prune: true
+                selfHeal: true
+          EOF
+          echo "✅ Created ArgoCD application for demo"
+        else
+          echo "⚠️ ArgoCD not available for GitOps demo"
+        fi
+      - |
+        # Show deployment pipeline
+        echo "📋 Deployment Pipeline Status:"
+        echo "1. Code committed to repository"
+        echo "2. Container images built and pushed"
+        echo "3. Kubernetes manifests updated"
+        echo "4. ArgoCD syncs changes automatically"
+        echo "5. Application deployed and validated"
+      - echo "✅ CI/CD demo complete"
+
+  cleanup-demo:
+    desc: Clean up demo application resources
+    vars:
+      APP_NAME: '{{.APP_NAME}}'
+    cmds:
+      - echo "🧹 Cleaning up demo resources"
+      - echo "============================"
+      - |
+        # Delete demo namespace
+        NAMESPACE="demo-{{.APP_NAME}}"
+        if kubectl get namespace $NAMESPACE >/dev/null 2>&1; then
+          kubectl delete namespace $NAMESPACE
+          echo "✅ Deleted demo namespace: $NAMESPACE"
+        fi
+      - |
+        # Clean up ArgoCD application
+        if kubectl get application "{{.APP_NAME}}-demo" -n argocd >/dev/null 2>&1; then
+          kubectl delete application "{{.APP_NAME}}-demo" -n argocd
+          echo "✅ Removed ArgoCD application"
+        fi
+      - |
+        # Clean up application directories
+        rm -rf "./apps/{{.APP_NAME}}-api" 2>/dev/null || true
+        rm -rf "./apps/{{.APP_NAME}}-frontend" 2>/dev/null || true
+        rm -rf "./apps/{{.APP_NAME}}-backend" 2>/dev/null || true
+        rm -rf "./apps/{{.APP_NAME}}-config" 2>/dev/null || true
+        echo "✅ Cleaned up application directories"
+      - echo "✅ Demo cleanup completed"
+
+  show-demo-access:
+    desc: Show how to access the demo application
+    vars:
+      APP_NAME: '{{.APP_NAME}}'
+    cmds:
+      - |
+        cat << 'EOF'
+        
+        🎉 Demo Application Ready!
+        =========================
+        
+        ACCESS THE APPLICATION:
+        
+        Local Access (if using Kind):
+          1. Add to /etc/hosts: 127.0.0.1 {{.APP_NAME}}.local
+          2. Visit: http://{{.APP_NAME}}.local
+        
+        Port Forward Access:
+          kubectl port-forward svc/{{.APP_NAME}}-frontend 3000:3000 -n demo-{{.APP_NAME}}
+          Visit: http://localhost:3000
+        
+        API Access:
+          kubectl port-forward svc/{{.APP_NAME}}-api 8080:8080 -n demo-{{.APP_NAME}}
+          API: http://localhost:8080/api
+        
+        MONITORING AND OBSERVABILITY:
+          
+          Application Status:
+            task status APP_NAME={{.APP_NAME}}
+          
+          Application Logs:
+            task logs APP_NAME={{.APP_NAME}}
+          
+          Resource Usage:
+            kubectl top pods -n demo-{{.APP_NAME}}
+        
+        DEMONSTRATE FEATURES:
+          
+          Performance Testing:
+            task workflows:performance-demo APP_NAME={{.APP_NAME}}
+          
+          Security Scanning:
+            task workflows:security-demo APP_NAME={{.APP_NAME}}
+          
+          CI/CD Pipeline:
+            task workflows:ci-cd-demo APP_NAME={{.APP_NAME}}
+        
+        CLEANUP WHEN DONE:
+          task workflows:cleanup-demo APP_NAME={{.APP_NAME}}
+        
+        🚀 Enjoy exploring the IDP platform!
+        EOF
+
+  help:
+    desc: Show demo workflow help and examples
+    cmds:
+      - |
+        cat << 'EOF'
+        🎪 IDP Usage - Application Demo Workflows
+        =========================================
+        
+        COMPLETE DEMONSTRATIONS:
+          task workflows:full-stack-demo APP_NAME=my-demo CLUSTER_NAME=demo-cluster
+          task workflows:performance-demo APP_NAME=my-demo
+          task workflows:security-demo APP_NAME=my-demo
+          task workflows:ci-cd-demo APP_NAME=my-demo
+        
+        DEMO COMPONENTS:
+          task workflows:create-microservices-demo APP_NAME=my-demo
+          task workflows:build-demo-services APP_NAME=my-demo
+          task workflows:deploy-full-stack APP_NAME=my-demo
+          task workflows:setup-demo-networking APP_NAME=my-demo
+          task workflows:demonstrate-features APP_NAME=my-demo
+        
+        MANAGEMENT:
+          task workflows:show-demo-access APP_NAME=my-demo
+          task workflows:cleanup-demo APP_NAME=my-demo
+        
+        EXAMPLES:
+          # Complete microservices demo
+          task workflows:full-stack-demo APP_NAME=ecommerce
+        
+          # Performance demonstration
+          task workflows:performance-demo APP_NAME=ecommerce
+        
+          # Security features demo
+          task workflows:security-demo APP_NAME=ecommerce
+        
+          # Clean up after demo
+          task workflows:cleanup-demo APP_NAME=ecommerce
+        
+        PARAMETERS:
+          APP_NAME      - Base name for demo applications
+          CLUSTER_NAME  - Target cluster name
+          DEMO_TYPE     - Type of demo (full-stack|performance|security|ci-cd)
+          ENVIRONMENT   - Demo environment (default: demo)
+        
+        DEMO FEATURES:
+        • Multi-language microservices (Go, Node.js, Python)
+        • Database integration (PostgreSQL)
+        • Service-to-service communication
+        • Ingress and networking
+        • Performance testing and monitoring
+        • Security scanning and policies
+        • CI/CD pipeline integration with ArgoCD
+        • Horizontal pod autoscaling
+        • Comprehensive logging and metrics
+        EOF

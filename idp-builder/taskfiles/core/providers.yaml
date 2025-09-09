@@ -1,0 +1,415 @@
+version: '3'
+
+# ===============================
+# Multi-Cloud Provider Configuration
+# ===============================
+
+vars:
+  # Standardized parameters
+  PROVIDER: '{{.PROVIDER | default "kind"}}'
+  CLUSTER_NAME: '{{.CLUSTER_NAME | default "idp-cluster"}}'
+  ENVIRONMENT: '{{.ENVIRONMENT | default "dev"}}'
+  REGION: '{{.REGION | default "ap-southeast-1"}}'
+  
+  # Display colors
+  COLOR_GREEN: '\033[32;1m'
+  COLOR_YELLOW: '\033[33;1m'
+  COLOR_RED: '\033[31;1m'
+  COLOR_BLUE: '\033[34;1m'
+  COLOR_RESET: '\033[0m'
+
+tasks:
+
+  # ===============================
+  # Provider Selection & Configuration
+  # ===============================
+
+  select-provider:
+    desc: Interactively select and configure cloud provider
+    aliases: [select]
+    cmds:
+      - task: _show-provider-menu
+      - task: _interactive-provider-selection
+      - task: _save-provider-choice
+      - task: show-provider-status
+
+  set-provider:
+    desc: Set provider directly without interactive prompt (PROVIDER required)
+    vars:
+      PROVIDER: '{{.PROVIDER}}'
+    preconditions:
+      - sh: 'case "{{.PROVIDER}}" in kind|aws|gcp|azure) true;; *) false;; esac'
+        msg: "PROVIDER must be one of: kind, aws, gcp, azure"
+    cmds:
+      - task: _validate-provider
+        vars:
+          PROVIDER: '{{.PROVIDER}}'
+      - task: _save-provider-to-env
+        vars:
+          PROVIDER: '{{.PROVIDER}}'
+      - task: show-provider-status
+
+  show-provider-status:
+    desc: Show current provider configuration and status
+    aliases: [show, status]
+    cmds:
+      - |
+        echo -e "{{.COLOR_GREEN}}Current Provider Configuration:{{.COLOR_RESET}}"
+        echo "================================"
+        echo ""
+        if [ -f .env ] && grep -q "PROVIDER=" .env; then
+          CURRENT=$(grep "PROVIDER=" .env | cut -d'=' -f2)
+          echo "  Provider: $CURRENT"
+          echo "  Cluster {{.CLUSTER_NAME}}"
+          echo "  Environment {{.ENVIRONMENT}}"
+          echo "  Region {{.REGION}}"
+          echo ""
+        else
+          echo "  No provider configured (using default {{.PROVIDER}})"
+          echo ""
+        fi
+      - task: _show-provider-status-details
+        vars:
+          PROVIDER: '{{.PROVIDER}}'
+
+  validate-provider:
+    desc: Validate provider configuration and credentials
+    vars:
+      PROVIDER: '{{.PROVIDER}}'
+    cmds:
+      - echo "🔍 Validating provider configuration for {{.PROVIDER}}"
+      - task: _validate-provider
+        vars:
+          PROVIDER: '{{.PROVIDER}}'
+      - task: _validate-provider-credentials
+        vars:
+          PROVIDER: '{{.PROVIDER}}'
+      - echo "✅ Provider {{.PROVIDER}} validation complete"
+
+  list-providers:
+    desc: List all supported cloud providers with descriptions
+    cmds:
+      - |
+        cat << 'EOF'
+        ☁️ Supported Cloud Providers:
+        ============================
+        
+        🏠 kind     - Kubernetes in Docker (local development)
+                     • Quick setup for testing and development
+                     • No cloud account required
+                     • Runs locally on your machine
+        
+        ☁️ aws      - Amazon Web Services
+                     • Production-ready EKS clusters
+                     • Requires AWS account and credentials
+                     • Supports auto-scaling and managed services
+        
+        ☁️ gcp      - Google Cloud Platform
+                     • Production-ready GKE clusters  
+                     • Requires GCP project and credentials
+                     • Supports auto-scaling and managed services
+        
+        ☁️ azure    - Microsoft Azure
+                     • Production-ready AKS clusters
+                     • Requires Azure account and credentials
+                     • Supports auto-scaling and managed services
+        
+        Usage Examples:
+        • task set-provider PROVIDER=kind
+        • task set-provider PROVIDER=aws REGION=ap-southeast-2
+        • task validate-provider PROVIDER=gcp
+        EOF
+
+  # ===============================
+  # Provider-Specific Configuration
+  # ===============================
+
+  configure-aws:
+    desc: Configure AWS provider settings
+    vars:
+      REGION: '{{.REGION | default "ap-southeast-1"}}'
+    cmds:
+      - echo "🔧 Configuring AWS provider..."
+      - task: set-provider
+        vars:
+          PROVIDER: aws
+      - task: _configure-aws-specific
+        vars:
+          REGION: '{{.REGION}}'
+
+  configure-gcp:
+    desc: Configure GCP provider settings  
+    vars:
+      REGION: '{{.REGION | default "us-central1"}}'
+      PROJECT_ID: '{{.PROJECT_ID}}'
+    cmds:
+      - echo "🔧 Configuring GCP provider..."
+      - task: set-provider
+        vars:
+          PROVIDER: gcp
+      - task: _configure-gcp-specific
+        vars:
+          REGION: '{{.REGION}}'
+          PROJECT_ID: '{{.PROJECT_ID}}'
+
+  configure-azure:
+    desc: Configure Azure provider settings
+    vars:
+      REGION: '{{.REGION | default "eastus"}}'
+    cmds:
+      - echo "🔧 Configuring Azure provider..."
+      - task: set-provider
+        vars:
+          PROVIDER: azure
+      - task: _configure-azure-specific
+        vars:
+          REGION: '{{.REGION}}'
+
+  configure-kind:
+    desc: Configure Kind provider settings (local development)
+    cmds:
+      - echo "🔧 Configuring Kind provider..."
+      - task: set-provider
+        vars:
+          PROVIDER: kind
+      - task: _configure-kind-specific
+
+  # ===============================
+  # Internal Helper Tasks  
+  # ===============================
+
+  _show-provider-menu:
+    internal: true
+    cmds:
+      - |
+        cat << 'EOF'
+        
+        ╭─────────────────────────────────────────╮
+        │           Provider Selection            │
+        ╰─────────────────────────────────────────╯
+        
+        Please choose a cloud provider:
+        
+        1) kind  - Kubernetes in Docker (local)
+        2) aws   - Amazon Web Services  
+        3) gcp   - Google Cloud Platform
+        4) azure - Microsoft Azure
+        
+        EOF
+
+  _interactive-provider-selection:
+    internal: true
+    cmds:
+      - |
+        echo -n "Enter your choice (1-4): "
+        read choice
+        case $choice in
+          1) SELECTED_PROVIDER="kind" ;;
+          2) SELECTED_PROVIDER="aws" ;;
+          3) SELECTED_PROVIDER="gcp" ;;
+          4) SELECTED_PROVIDER="azure" ;;
+          *) echo "Invalid choice. Please run the task again."; exit 1 ;;
+        esac
+        echo "SELECTED_PROVIDER=$SELECTED_PROVIDER" > .provider-tmp
+
+  _save-provider-choice:
+    internal: true
+    cmds:
+      - |
+        if [ -f .provider-tmp ]; then
+          source .provider-tmp
+          rm .provider-tmp
+          echo "PROVIDER=$SELECTED_PROVIDER" >> .env
+          echo -e "{{.COLOR_GREEN}}✅ Provider set to: $SELECTED_PROVIDER{{.COLOR_RESET}}"
+        else
+          echo "❌ No provider selection found"
+          exit 1
+        fi
+
+  _validate-provider:
+    internal: true
+    vars:
+      PROVIDER: '{{.PROVIDER}}'
+    cmds:
+      - |
+        case "{{.PROVIDER}}" in
+          kind|aws|gcp|azure)
+            echo "✅ Provider {{.PROVIDER}} is valid"
+            ;;
+          *)
+            echo "❌ Invalid provider {{.PROVIDER}}"
+            echo "   Supported providers: kind, aws, gcp, azure"
+            exit 1
+            ;;
+        esac
+
+  _save-provider-to-env:
+    internal: true
+    vars:
+      PROVIDER: '{{.PROVIDER}}'
+    cmds:
+      - |
+        # Create env file if it doesn't exist
+        touch .env
+        
+        # Remove existing provider line
+        if grep -q "^PROVIDER=" .env; then
+          sed -i '/^PROVIDER=/d' .env
+        fi
+        
+        # Add new provider line
+        echo "PROVIDER={{.PROVIDER}}" >> .env
+        echo -e "{{.COLOR_GREEN}}✅ Provider set to: {{.PROVIDER}}{{.COLOR_RESET}}"
+
+  _show-provider-status-details:
+    internal: true  
+    vars:
+      PROVIDER: '{{.PROVIDER}}'
+    cmds:
+      - |
+        case "{{.PROVIDER}}" in
+          kind)
+            echo -e "{{.COLOR_BLUE}}Kind Status:{{.COLOR_RESET}}"
+            if command -v kind >/dev/null 2>&1; then
+              echo "  ✅ kind CLI available"
+              if kind get clusters 2>/dev/null | grep -q "{{.CLUSTER_NAME}}"; then
+                echo "  ✅ Cluster {{.CLUSTER_NAME}} exists"
+              else
+                echo "  ⚠️ Cluster {{.CLUSTER_NAME}} not found"
+              fi
+            else
+              echo "  ❌ kind CLI not installed"
+            fi
+            ;;
+          aws)
+            echo -e "{{.COLOR_BLUE}}AWS Status:{{.COLOR_RESET}}"
+            if command -v aws >/dev/null 2>&1; then
+              echo "  ✅ AWS CLI available"
+              if aws sts get-caller-identity >/dev/null 2>&1; then
+                echo "  ✅ AWS credentials configured"
+              else
+                echo "  ❌ AWS credentials not configured"
+              fi
+            else
+              echo "  ❌ AWS CLI not installed"
+            fi
+            ;;
+          gcp)
+            echo -e "{{.COLOR_BLUE}}GCP Status:{{.COLOR_RESET}}"
+            if command -v gcloud >/dev/null 2>&1; then
+              echo "  ✅ gcloud CLI available"
+              if gcloud auth list --filter=status:ACTIVE --format="value(account)" | head -n1 >/dev/null 2>&1; then
+                echo "  ✅ GCP credentials configured"
+              else
+                echo "  ❌ GCP credentials not configured"
+              fi
+            else
+              echo "  ❌ gcloud CLI not installed"
+            fi
+            ;;
+          azure)
+            echo -e "{{.COLOR_BLUE}}Azure Status:{{.COLOR_RESET}}"
+            if command -v az >/dev/null 2>&1; then
+              echo "  ✅ Azure CLI available"
+              if az account show >/dev/null 2>&1; then
+                echo "  ✅ Azure credentials configured"
+              else
+                echo "  ❌ Azure credentials not configured"
+              fi
+            else
+              echo "  ❌ Azure CLI not installed"
+            fi
+            ;;
+        esac
+
+  _validate-provider-credentials:
+    internal: true
+    vars:
+      PROVIDER: '{{.PROVIDER}}'
+    cmds:
+      - |
+        case "{{.PROVIDER}}" in
+          kind)
+            echo "✅ Kind provider - no credentials required"
+            ;;
+          aws)
+            if command -v aws >/dev/null 2>&1 && aws sts get-caller-identity >/dev/null 2>&1; then
+              echo "✅ AWS credentials validated"
+            else
+              echo "❌ AWS credentials validation failed"
+              exit 1
+            fi
+            ;;
+          gcp)
+            if command -v gcloud >/dev/null 2>&1 && gcloud auth list --filter=status:ACTIVE --format="value(account)" | head -n1 >/dev/null 2>&1; then
+              echo "✅ GCP credentials validated"
+            else
+              echo "❌ GCP credentials validation failed"
+              exit 1
+            fi
+            ;;
+          azure)
+            if command -v az >/dev/null 2>&1 && az account show >/dev/null 2>&1; then
+              echo "✅ Azure credentials validated"
+            else
+              echo "❌ Azure credentials validation failed"
+              exit 1
+            fi
+            ;;
+        esac
+
+  _configure-aws-specific:
+    internal: true
+    vars:
+      REGION: '{{.REGION}}'
+    cmds:
+      - |
+        echo "  Setting AWS region {{.REGION}}"
+        # Save to env file
+        touch .env
+        if grep -q "^AWS_REGION=" .env; then
+          sed -i '/^AWS_REGION=/d' .env
+        fi
+        echo "AWS_REGION={{.REGION}}" >> .env
+
+  _configure-gcp-specific:
+    internal: true
+    vars:
+      REGION: '{{.REGION}}'
+      PROJECT_ID: '{{.PROJECT_ID}}'
+    cmds:
+      - |
+        echo "  Setting GCP region {{.REGION}}"
+        touch .env
+        if grep -q "^GCP_REGION=" .env; then
+          sed -i '/^GCP_REGION=/d' .env
+        fi
+        echo "GCP_REGION={{.REGION}}" >> .env
+        
+        if [ -n "{{.PROJECT_ID}}" ]; then
+          echo "  Setting GCP project {{.PROJECT_ID}}"
+          if grep -q "^GCP_PROJECT=" .env; then
+            sed -i '/^GCP_PROJECT=/d' .env
+          fi
+          echo "GCP_PROJECT={{.PROJECT_ID}}" >> .env
+        fi
+
+  _configure-azure-specific:
+    internal: true
+    vars:
+      REGION: '{{.REGION}}'
+    cmds:
+      - |
+        echo "  Setting Azure region {{.REGION}}"
+        touch .env
+        if grep -q "^AZURE_REGION=" .env; then
+          sed -i '/^AZURE_REGION=/d' .env
+        fi
+        echo "AZURE_REGION={{.REGION}}" >> .env
+
+  _configure-kind-specific:
+    internal: true
+    cmds:
+      - |
+        echo "  Kind provider configured for local development"
+        echo "  No additional configuration required"

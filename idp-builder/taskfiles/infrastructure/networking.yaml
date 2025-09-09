@@ -1,0 +1,194 @@
+version: '3'
+
+# ===============================
+# Networking and Ingress Management
+# ===============================
+
+vars:
+  # Standardized parameters
+  CLUSTER_NAME: '{{.CLUSTER_NAME | default "idp-cluster"}}'
+  PROVIDER: '{{.PROVIDER | default "kind"}}'
+  ENVIRONMENT: '{{.ENVIRONMENT | default "dev"}}'
+  INGRESS_CLASS: '{{.INGRESS_CLASS | default "nginx"}}'
+  DOMAIN: '{{.DOMAIN | default "local.dev"}}'
+
+tasks:
+
+  # ===============================
+  # Ingress Controller Management
+  # ===============================
+
+  install-ingress:
+    desc: Install ingress controller for the specified provider
+    vars:
+      INGRESS_CLASS: '{{.INGRESS_CLASS}}'
+      PROVIDER: '{{.PROVIDER}}'
+    cmds:
+      - echo "🌐 Installing {{.INGRESS_CLASS}} ingress controller for {{.PROVIDER}} provider"
+      - task: _install-{{.INGRESS_CLASS}}-ingress
+        vars:
+          PROVIDER: '{{.PROVIDER}}'
+      - task: _wait-for-ingress-ready
+        vars:
+          INGRESS_CLASS: '{{.INGRESS_CLASS}}'
+      - echo "✅ Ingress controller {{.INGRESS_CLASS}} installed successfully"
+
+  uninstall-ingress:
+    desc: Uninstall ingress controller
+    vars:
+      INGRESS_CLASS: '{{.INGRESS_CLASS}}'
+    cmds:
+      - echo "🗑️ Uninstalling {{.INGRESS_CLASS}} ingress controller"
+      - task: _uninstall-{{.INGRESS_CLASS}}-ingress
+      - echo "✅ Ingress controller {{.INGRESS_CLASS}} uninstalled"
+
+  check-ingress-status:
+    desc: Check status of ingress controller
+    vars:
+      INGRESS_CLASS: '{{.INGRESS_CLASS}}'
+    cmds:
+      - echo "📊 Checking ingress controller status"
+      - |
+        if kubectl get pods -n ingress-nginx -l app.kubernetes.io/name=ingress-nginx >/dev/null 2>&1; then
+          echo "✅ Nginx ingress controller is running"
+          kubectl get pods -n ingress-nginx -l app.kubernetes.io/name=ingress-nginx
+          echo ""
+          echo "📊 Ingress classes:"
+          kubectl get ingressclass
+        else
+          echo "❌ No ingress controller found"
+        fi
+
+  # ===============================
+  # Load Balancer Management
+  # ===============================
+
+  setup-load-balancer:
+    desc: Setup load balancer based on provider
+    vars:
+      PROVIDER: '{{.PROVIDER}}'
+    cmds:
+      - echo "⚖️ Setting up load balancer for {{.PROVIDER}} provider"
+      - task: _setup-{{.PROVIDER}}-load-balancer
+
+  # ===============================
+  # DNS and Certificate Management
+  # ===============================
+
+  setup-dns:
+    desc: Setup DNS configuration (placeholder for future implementation)
+    vars:
+      DOMAIN: '{{.DOMAIN}}'
+    cmds:
+      - |
+        echo "🌐 DNS setup for domain {{.DOMAIN}}"
+        echo "ℹ️ DNS configuration is provider-specific and will be implemented in Phase 3"
+        echo "For now, using local domain {{.DOMAIN}}"
+
+  setup-certificates:
+    desc: Setup certificate management (placeholder for future implementation)
+    cmds:
+      - |
+        echo "🔐 Certificate management setup"
+        echo "ℹ️ Certificate management will be implemented in Phase 3"
+        echo "Consider using cert-manager for automated certificate management"
+
+  # ===============================
+  # Network Policies (Security)
+  # ===============================
+
+  apply-network-policies:
+    desc: Apply basic network policies for security
+    vars:
+      ENVIRONMENT: '{{.ENVIRONMENT}}'
+    cmds:
+      - echo "🔒 Applying network policies for {{.ENVIRONMENT}} environment"
+      - |
+        # Create a basic network policy for production environments
+        if [ "{{.ENVIRONMENT}}" = "production" ]; then
+          echo "Applying strict network policies for production"
+          # Implementation will be added in Phase 3
+        else
+          echo "Using permissive network policies for {{.ENVIRONMENT}}"
+        fi
+
+  # ===============================
+  # Internal Helper Tasks
+  # ===============================
+
+  _install-nginx-ingress:
+    internal: true
+    vars:
+      PROVIDER: '{{.PROVIDER}}'
+    cmds:
+      - |
+        case "{{.PROVIDER}}" in
+          kind)
+            echo "Installing nginx ingress for Kind"
+            kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/main/deploy/static/provider/kind/deploy.yaml
+            ;;
+          aws)
+            echo "Installing nginx ingress for AWS"
+            kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/main/deploy/static/provider/aws/deploy.yaml
+            ;;
+          gcp)
+            echo "Installing nginx ingress for GCP"
+            kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/main/deploy/static/provider/gce/deploy.yaml
+            ;;
+          azure)
+            echo "Installing nginx ingress for Azure"
+            kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/main/deploy/static/provider/aks/deploy.yaml
+            ;;
+          *)
+            echo "Installing nginx ingress (generic cloud)"
+            kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/main/deploy/static/provider/cloud/deploy.yaml
+            ;;
+        esac
+
+  _uninstall-nginx-ingress:
+    internal: true
+    cmds:
+      - |
+        kubectl delete namespace ingress-nginx --ignore-not-found=true
+        kubectl delete clusterrole ingress-nginx --ignore-not-found=true
+        kubectl delete clusterrolebinding ingress-nginx --ignore-not-found=true
+
+  _wait-for-ingress-ready:
+    internal: true
+    vars:
+      INGRESS_CLASS: '{{.INGRESS_CLASS}}'
+    cmds:
+      - |
+        echo "⏳ Waiting for ingress controller to be ready..."
+        kubectl wait --namespace ingress-nginx \
+          --for=condition=ready pod \
+          --selector=app.kubernetes.io/component=controller \
+          --timeout=300s
+
+  _setup-kind-load-balancer:
+    internal: true
+    cmds:
+      - |
+        echo "⚖️ Kind uses port forwarding instead of load balancers"
+        echo "Ingress is accessible via localhost:80 and localhost:443"
+
+  _setup-aws-load-balancer:
+    internal: true
+    cmds:
+      - |
+        echo "⚖️ Setting up AWS Load Balancer"
+        echo "ℹ️ AWS Load Balancer Controller will be installed in Platform phase"
+
+  _setup-gcp-load-balancer:
+    internal: true
+    cmds:
+      - |
+        echo "⚖️ Setting up GCP Load Balancer"
+        echo "ℹ️ GCP Load Balancer is managed automatically by GKE"
+
+  _setup-azure-load-balancer:
+    internal: true
+    cmds:
+      - |
+        echo "⚖️ Setting up Azure Load Balancer"
+        echo "ℹ️ Azure Load Balancer is managed automatically by AKS"
