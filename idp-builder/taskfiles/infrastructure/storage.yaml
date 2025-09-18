@@ -9,8 +9,88 @@ vars:
   CLUSTER_NAME: '{{.CLUSTER_NAME | default "idp-cluster"}}'
   PROVIDER: '{{.PROVIDER | default "kind"}}'
   ENVIRONMENT: '{{.ENVIRONMENT | default "dev"}}'
+  
+  # Silent Mode Control
+  SILENT_MODE: '{{.SILENT_MODE | default "false"}}'
 
 tasks:
+
+  # ===============================
+  # Help and Information
+  # ===============================
+
+  help:
+    desc: Show storage management help and available tasks
+    silent: true
+    cmds:
+      - |
+        cat << 'EOF'
+        Storage Management
+        ====================
+        
+        Available Commands:
+        ------------------
+        setup-storage            - Setup storage classes and persistent volumes for the specified provider
+        check-storage-classes    - List available storage classes
+        check-persistent-volumes - List persistent volumes and claims
+        create-test-pvc          - Create a test persistent volume claim
+        delete-test-pvc          - Delete test persistent volume claim
+        setup-backup             - Setup backup solution (placeholder for future implementation)
+        
+        Usage Examples:
+        --------------
+        task storage:help
+        task storage:setup-storage PROVIDER=kind
+        task storage:check-storage-classes
+        task storage:check-persistent-volumes
+        task storage:create-test-pvc
+        task storage:delete-test-pvc
+        task storage:setup-backup PROVIDER=aws
+        
+        Supported Providers:
+        -------------------
+        kind     - Local storage using hostPath
+        aws      - AWS EBS (Elastic Block Store)
+        gcp      - Google Persistent Disk
+        azure    - Azure Disk Storage
+        
+        Storage Classes:
+        ---------------
+        kind     - standard (hostPath-based)
+        aws      - gp3, io1, io2 (EBS volume types)
+        gcp      - standard, ssd, balanced (Persistent Disk types)
+        azure    - standard, premium (Azure Disk types)
+        
+        Environment Variables:
+        ---------------------
+        PROVIDER             - Cloud provider (default: kind)
+        CLUSTER_NAME         - Cluster name (default: idp-cluster)
+        ENVIRONMENT          - Environment type (default: dev)
+        
+        Provider-Specific Variables:
+        ---------------------------
+        AWS:
+          AWS_REGION, EBS_VOLUME_TYPE, EBS_IOPS, EBS_THROUGHPUT
+        GCP:
+          GOOGLE_CLOUD_PROJECT, DISK_TYPE, DISK_SIZE
+        Azure:
+          AZURE_RESOURCE_GROUP, DISK_SKU, DISK_SIZE
+        
+        Storage Features:
+        ----------------
+        - Dynamic provisioning of persistent volumes
+        - Storage class configuration per provider
+        - Backup and restore capabilities (planned)
+        - Encryption at rest (provider-dependent)
+        - High availability and replication
+        
+        Quick Start:
+        -----------
+        1. task storage:setup-storage                         # Setup storage classes
+        2. task storage:check-storage-classes                 # Verify installation
+        3. task storage:create-test-pvc                       # Test storage
+        4. task storage:check-persistent-volumes              # Check PV status
+        EOF
 
   # ===============================
   # Storage Class Management
@@ -18,50 +98,71 @@ tasks:
 
   setup-storage:
     desc: Setup storage classes and persistent volumes for the specified provider
+    silent: true
     vars:
       PROVIDER: '{{.PROVIDER}}'
       ENVIRONMENT: '{{.ENVIRONMENT}}'
     cmds:
-      - echo "💾 Setting up storage for {{.PROVIDER}} provider in {{.ENVIRONMENT}} environment"
+      - |
+        if [ "{{.SILENT_MODE}}" != "true" ]; then
+          echo "Setting up storage for {{.PROVIDER}} provider in {{.ENVIRONMENT}} environment"
+        fi
       - task: _setup-{{.PROVIDER}}-storage
         vars:
           ENVIRONMENT: '{{.ENVIRONMENT}}'
       - task: check-storage-classes
-      - echo "✅ Storage setup complete for {{.PROVIDER}}"
+      - |
+        if [ "{{.SILENT_MODE}}" != "true" ]; then
+          echo "Storage setup complete for {{.PROVIDER}}"
+        fi
 
   check-storage-classes:
     desc: List available storage classes
+    silent: true
     cmds:
       - |
-        echo "📊 Available Storage Classes:"
+        if [ "{{.SILENT_MODE}}" != "true" ]; then
+          echo "Available Storage Classes:"
+        fi
         if kubectl get storageclass >/dev/null 2>&1; then
-          kubectl get storageclass -o wide
+          if [ "{{.SILENT_MODE}}" != "true" ]; then
+            kubectl get storageclass -o wide
+          fi
         else
           echo "❌ No storage classes found or kubectl not connected"
         fi
 
   check-persistent-volumes:
     desc: List persistent volumes and claims
+    silent: true
     cmds:
       - |
-        echo "📊 Persistent Volumes:"
+        if [ "{{.SILENT_MODE}}" != "true" ]; then
+          echo "Persistent Volumes:"
+        fi
         if kubectl get pv >/dev/null 2>&1; then
-          kubectl get pv -o wide
-          echo ""
-          echo "📊 Persistent Volume Claims (all namespaces):"
-          kubectl get pvc --all-namespaces -o wide
+          if [ "{{.SILENT_MODE}}" != "true" ]; then
+            kubectl get pv -o wide
+            echo ""
+            echo "Persistent Volume Claims (all namespaces):"
+            kubectl get pvc --all-namespaces -o wide
+          fi
         else
           echo "❌ Cannot access persistent volumes"
         fi
 
   create-test-pvc:
     desc: Create a test persistent volume claim
+    silent: true
     vars:
       PVC_NAME: '{{.PVC_NAME | default "test-pvc"}}'
       NAMESPACE: '{{.NAMESPACE | default "default"}}'
       SIZE: '{{.SIZE | default "1Gi"}}'
     cmds:
-      - echo "🧪 Creating test PVC {{.PVC_NAME}} ({{.SIZE}}) in namespace {{.NAMESPACE}}"
+      - |
+        if [ "{{.SILENT_MODE}}" != "true" ]; then
+          echo "Creating test PVC {{.PVC_NAME}} ({{.SIZE}}) in namespace {{.NAMESPACE}}"
+        fi
       - |
         cat << EOF | kubectl apply -f -
         apiVersion: v1
@@ -76,18 +177,28 @@ tasks:
             requests:
               storage: {{.SIZE}}
         EOF
-      - echo "✅ Test PVC {{.PVC_NAME}} created"
-      - kubectl get pvc {{.PVC_NAME}} -n {{.NAMESPACE}}
+      - |
+        if [ "{{.SILENT_MODE}}" != "true" ]; then
+          echo "Test PVC {{.PVC_NAME}} created"
+          kubectl get pvc {{.PVC_NAME}} -n {{.NAMESPACE}}
+        fi
 
   delete-test-pvc:
     desc: Delete test persistent volume claim
+    silent: true
     vars:
       PVC_NAME: '{{.PVC_NAME | default "test-pvc"}}'
       NAMESPACE: '{{.NAMESPACE | default "default"}}'
     cmds:
-      - echo "🗑️ Deleting test PVC {{.PVC_NAME}} from namespace {{.NAMESPACE}}"
+      - |
+        if [ "{{.SILENT_MODE}}" != "true" ]; then
+          echo "Deleting test PVC {{.PVC_NAME}} from namespace {{.NAMESPACE}}"
+        fi
       - kubectl delete pvc {{.PVC_NAME}} -n {{.NAMESPACE}} --ignore-not-found=true
-      - echo "✅ Test PVC {{.PVC_NAME}} deleted"
+      - |
+        if [ "{{.SILENT_MODE}}" != "true" ]; then
+          echo "Test PVC {{.PVC_NAME}} deleted"
+        fi
 
   # ===============================
   # Backup and Restore (Placeholder)
@@ -95,12 +206,13 @@ tasks:
 
   setup-backup:
     desc: Setup backup solution (placeholder for future implementation)
+    silent: true
     vars:
       PROVIDER: '{{.PROVIDER}}'
     cmds:
       - |
-        echo "💼 Backup setup for {{.PROVIDER}} provider"
-        echo "ℹ️ Backup solutions will be implemented in Phase 6"
+        echo "Backup setup for {{.PROVIDER}} provider"
+        echo "Note: Backup solutions will be implemented in Phase 6"
         case "{{.PROVIDER}}" in
           aws)
             echo "Consider using AWS EBS snapshots or Velero"
@@ -122,12 +234,13 @@ tasks:
 
   _setup-kind-storage:
     internal: true
-    vars:
-      ENVIRONMENT: '{{.ENVIRONMENT}}'
+    silent: true
+    # vars:
+    #   ENVIRONMENT: '{{.ENVIRONMENT}}'
     cmds:
       - |
-        echo "💾 Setting up Kind storage"
-        echo "ℹ️ Kind uses local storage by default"
+        echo "Setting up Kind storage"
+        echo "Note: Kind uses local storage by default"
         
         # Create a basic storage class if it doesn't exist
         if ! kubectl get storageclass kind-local >/dev/null 2>&1; then
@@ -146,15 +259,16 @@ tasks:
         EOF
         fi
         
-        echo "✅ Kind storage configuration complete"
+        echo "Kind storage configuration complete"
 
   _setup-aws-storage:
     internal: true
+    silent: true
     vars:
       ENVIRONMENT: '{{.ENVIRONMENT}}'
     cmds:
       - |
-        echo "💾 Setting up AWS EBS storage"
+        echo "Setting up AWS EBS storage"
         
         # Install AWS EBS CSI driver
         if ! kubectl get storageclass gp3 >/dev/null 2>&1; then
@@ -178,15 +292,16 @@ tasks:
         EOF
         fi
         
-        echo "✅ AWS storage configuration complete"
+        echo "AWS storage configuration complete"
 
   _setup-gcp-storage:
     internal: true
+    silent: true
     vars:
       ENVIRONMENT: '{{.ENVIRONMENT}}'
     cmds:
       - |
-        echo "💾 Setting up GCP persistent disk storage"
+        echo "Setting up GCP persistent disk storage"
         
         # Create SSD storage class if it doesn't exist
         if ! kubectl get storageclass fast-ssd >/dev/null 2>&1; then
@@ -204,15 +319,16 @@ tasks:
         EOF
         fi
         
-        echo "✅ GCP storage configuration complete"
+        echo "GCP storage configuration complete"
 
   _setup-azure-storage:
     internal: true
+    silent: true
     vars:
       ENVIRONMENT: '{{.ENVIRONMENT}}'
     cmds:
       - |
-        echo "💾 Setting up Azure disk storage"
+        echo "Setting up Azure disk storage"
         
         # Create premium storage class if it doesn't exist
         if ! kubectl get storageclass managed-premium-retain >/dev/null 2>&1; then
@@ -231,4 +347,4 @@ tasks:
         EOF
         fi
         
-        echo "✅ Azure storage configuration complete"
+        echo "Azure storage configuration complete"

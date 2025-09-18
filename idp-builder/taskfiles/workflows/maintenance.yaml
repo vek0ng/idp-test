@@ -15,7 +15,7 @@ tasks:
     vars:
       CLUSTER_NAME: '{{.CLUSTER_NAME}}'
     cmds:
-      - echo "🏥 IDP Platform Health Check"
+      - echo "IDP Platform Health Check"
       - echo "============================"
       - echo "Cluster {{.CLUSTER_NAME}}"
       - echo ""
@@ -34,19 +34,19 @@ tasks:
         vars:
           CLUSTER_NAME: '{{.CLUSTER_NAME}}'
       - echo ""
-      - echo "✅ Complete health check finished"
+      - echo "Complete health check finished"
 
   check-infrastructure-health:
     desc: Check health of infrastructure components
     vars:
       CLUSTER_NAME: '{{.CLUSTER_NAME}}'
     cmds:
-      - echo "🔍 Infrastructure Health Check"
+      - echo "Infrastructure Health Check"
       - echo "============================="
       - |
         # Check cluster connectivity
         if kubectl cluster-info >/dev/null 2>&1; then
-          echo "✅ Cluster connectivity: OK"
+          echo "Cluster connectivity: OK"
         else
           echo "❌ Cluster connectivity: FAILED"
         fi
@@ -54,15 +54,15 @@ tasks:
         # Check node status
         NODES_READY=$(kubectl get nodes --no-headers | grep -c " Ready ")
         NODES_TOTAL=$(kubectl get nodes --no-headers | wc -l)
-        echo "✅ Cluster nodes: $NODES_READY/$NODES_TOTAL Ready"
+        echo "Cluster nodes: $NODES_READY/$NODES_TOTAL Ready"
       - |
         # Check system pods
         SYSTEM_PODS=$(kubectl get pods -n kube-system --no-headers | grep -c "Running")
-        echo "✅ System pods running: $SYSTEM_PODS"
+        echo "System pods running: $SYSTEM_PODS"
       - |
         # Check ingress controller
         if kubectl get pods -n ingress-nginx --no-headers | grep -q "Running"; then
-          echo "✅ Ingress controller: Running"
+          echo "Ingress controller: Running"
         else
           echo "⚠️ Ingress controller: Not found or not running"
         fi
@@ -72,13 +72,13 @@ tasks:
     vars:
       CLUSTER_NAME: '{{.CLUSTER_NAME}}'
     cmds:
-      - echo "🚀 Platform Components Health"
+      - echo "Platform Components Health"
       - echo "============================="
       - |
         # Check ArgoCD
         if kubectl get pods -n argocd --no-headers | grep -q "Running"; then
           ARGOCD_PODS=$(kubectl get pods -n argocd --no-headers | grep -c "Running")
-          echo "✅ ArgoCD: $ARGOCD_PODS pods running"
+          echo "ArgoCD: $ARGOCD_PODS pods running"
         else
           echo "⚠️ ArgoCD: Not installed or not running"
         fi
@@ -86,11 +86,11 @@ tasks:
         # Check Crossplane
         if kubectl get pods -n crossplane-system --no-headers | grep -q "Running"; then
           CROSSPLANE_PODS=$(kubectl get pods -n crossplane-system --no-headers | grep -c "Running")
-          echo "✅ Crossplane: $CROSSPLANE_PODS pods running"
+          echo "Crossplane: $CROSSPLANE_PODS pods running"
           
           # Check providers
           PROVIDERS=$(kubectl get providers.pkg.crossplane.io --no-headers | grep -c "True")
-          echo "✅ Crossplane providers healthy: $PROVIDERS"
+          echo "Crossplane providers healthy: $PROVIDERS"
         else
           echo "⚠️ Crossplane: Not installed or not running"
         fi
@@ -98,7 +98,7 @@ tasks:
         # Check Backstage
         if kubectl get pods -n backstage --no-headers | grep -q "Running"; then
           BACKSTAGE_PODS=$(kubectl get pods -n backstage --no-headers | grep -c "Running")
-          echo "✅ Backstage: $BACKSTAGE_PODS pods running"
+          echo "Backstage: $BACKSTAGE_PODS pods running"
         else
           echo "⚠️ Backstage: Not installed or not running"
         fi
@@ -108,7 +108,7 @@ tasks:
     vars:
       CLUSTER_NAME: '{{.CLUSTER_NAME}}'
     cmds:
-      - echo "📊 Resource Utilization"
+      - echo "Resource Utilization"
       - echo "======================"
       - |
         # Node resource usage
@@ -131,7 +131,7 @@ tasks:
       CLUSTER_NAME: '{{.CLUSTER_NAME}}'
       PROVIDER: '{{.PROVIDER}}'
     cmds:
-      - echo "🔄 Platform Update Process"
+      - echo "Platform Update Process"
       - echo "========================="
       - echo "Cluster - {{.CLUSTER_NAME}}"
       - echo ""
@@ -154,14 +154,14 @@ tasks:
       - task: health-check-all
         vars:
           CLUSTER_NAME: '{{.CLUSTER_NAME}}'
-      - echo "✅ Platform update complete"
+      - echo "Platform update complete"
 
   update-argocd:
     desc: Update ArgoCD to latest stable version
     vars:
       CLUSTER_NAME: '{{.CLUSTER_NAME}}'
     cmds:
-      - echo "🔄 Updating ArgoCD"
+      - echo "Updating ArgoCD"
       - |
         # Get current version
         CURRENT_VERSION=$(kubectl get deployment argocd-server -n argocd -o jsonpath='{.spec.template.spec.containers[0].image}' | cut -d':' -f2)
@@ -169,18 +169,18 @@ tasks:
       - |
         # Update to latest stable
         kubectl apply -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml
-        echo "✅ ArgoCD update initiated"
+        echo "ArgoCD update initiated"
       - |
         # Wait for rollout
         kubectl rollout status deployment/argocd-server -n argocd --timeout=300s
-        echo "✅ ArgoCD update complete"
+        echo "ArgoCD update complete"
 
   update-crossplane:
     desc: Update Crossplane to latest stable version
     vars:
       CLUSTER_NAME: '{{.CLUSTER_NAME}}'
     cmds:
-      - echo "🔄 Updating Crossplane"
+      - echo "Updating Crossplane"
       - |
         # Update Crossplane core
         helm repo update
@@ -188,21 +188,21 @@ tasks:
           --namespace crossplane-system \
           --wait \
           --timeout=300s
-        echo "✅ Crossplane core updated"
+        echo "Crossplane core updated"
       - |
         # Update providers if needed
         echo "Checking provider updates..."
         kubectl get providers.pkg.crossplane.io -o name | while read provider; do
           echo "Provider: $provider is healthy"
         done
-        echo "✅ Provider check complete"
+        echo "Provider check complete"
 
   update-backstage:
     desc: Update Backstage to latest version
     vars:
       CLUSTER_NAME: '{{.CLUSTER_NAME}}'
     cmds:
-      - echo "🔄 Updating Backstage"
+      - echo "Updating Backstage"
       - |
         # Update using Helm if available
         if helm list -n backstage | grep -q backstage; then
@@ -211,7 +211,7 @@ tasks:
             --namespace backstage \
             --wait \
             --timeout=300s
-          echo "✅ Backstage updated via Helm"
+          echo "Backstage updated via Helm"
         else
           echo "⚠️ Backstage not installed via Helm, manual update required"
         fi
@@ -222,7 +222,7 @@ tasks:
       CLUSTER_NAME: '{{.CLUSTER_NAME}}'
       BACKUP_LOCATION: '{{.BACKUP_LOCATION}}'
     cmds:
-      - echo "💾 Platform Backup Process"
+      - echo "Platform Backup Process"
       - echo "========================="
       - echo "Cluster - {{.CLUSTER_NAME}}"
       - echo "Backup Location - {{.BACKUP_LOCATION}}"
@@ -239,7 +239,7 @@ tasks:
         vars:
           BACKUP_DIR: '{{.BACKUP_LOCATION}}'
           CLUSTER_NAME: '{{.CLUSTER_NAME}}'
-      - echo "✅ Platform backup complete"
+      - echo "Platform backup complete"
 
   backup-configurations:
     desc: Backup platform configurations
@@ -247,7 +247,7 @@ tasks:
       BACKUP_DIR: '{{.BACKUP_DIR}}'
       CLUSTER_NAME: '{{.CLUSTER_NAME}}'
     cmds:
-      - echo "📋 Backing up configurations"
+      - echo "Backing up configurations"
       - |
         BACKUP_PATH="{{.BACKUP_DIR}}/$(date +%Y-%m-%d-%H%M%S)"
         
@@ -262,7 +262,7 @@ tasks:
         # Backup Backstage configuration
         kubectl get configmap backstage-app-config -n backstage -o yaml > "$BACKUP_PATH/backstage-config.yaml" 2>/dev/null || echo "⚠️ Backstage config not found"
         
-        echo "✅ Configurations backed up to $BACKUP_PATH"
+        echo "Configurations backed up to $BACKUP_PATH"
 
   backup-data:
     desc: Backup platform persistent data
@@ -270,14 +270,14 @@ tasks:
       BACKUP_DIR: '{{.BACKUP_DIR}}'
       CLUSTER_NAME: '{{.CLUSTER_NAME}}'
     cmds:
-      - echo "💾 Backing up persistent data"
+      - echo "Backing up persistent data"
       - |
         BACKUP_PATH="{{.BACKUP_DIR}}/$(date +%Y-%m-%d-%H%M%S)"
         
         # Backup PostgreSQL data for Backstage if present
         if kubectl get pod -n backstage -l app=postgresql >/dev/null 2>&1; then
           kubectl exec -n backstage -it $(kubectl get pod -n backstage -l app=postgresql -o jsonpath='{.items[0].metadata.name}') -- pg_dump -U postgres backstage > "$BACKUP_PATH/backstage-db.sql"
-          echo "✅ Backstage database backed up"
+          echo "Backstage database backed up"
         else
           echo "⚠️ PostgreSQL for Backstage not found"
         fi
@@ -286,56 +286,56 @@ tasks:
         kubectl get pv > "$BACKUP_PATH/persistent-volumes.txt"
         kubectl get pvc --all-namespaces > "$BACKUP_PATH/persistent-volume-claims.txt"
         
-        echo "✅ Data backup complete"
+        echo "Data backup complete"
 
   cleanup-resources:
     desc: Clean up unused resources and optimize platform
     vars:
       CLUSTER_NAME: '{{.CLUSTER_NAME}}'
     cmds:
-      - echo "🧹 Platform Resource Cleanup"
+      - echo "Platform Resource Cleanup"
       - echo "============================"
       - echo "Cluster- {{.CLUSTER_NAME}}"
       - |
         # Clean up completed jobs
         kubectl delete jobs --field-selector status.successful=1 --all-namespaces
-        echo "✅ Cleaned up completed jobs"
+        echo "Cleaned up completed jobs"
       - |
         # Clean up failed pods
         kubectl delete pods --field-selector=status.phase=Failed --all-namespaces
-        echo "✅ Cleaned up failed pods"
+        echo "Cleaned up failed pods"
       - |
         # Clean up unused ConfigMaps and Secrets (be careful!)
         echo "⚠️ Skipping ConfigMap/Secret cleanup (requires manual review)"
       - |
         # Clean up unused persistent volumes
-        kubectl get pv | grep Available | awk '{print $1}' | xargs -I {} kubectl delete pv {} 2>/dev/null || echo "✅ No unused PVs to clean"
-      - echo "✅ Resource cleanup complete"
+        kubectl get pv | grep Available | awk '{print $1}' | xargs -I {} kubectl delete pv {} 2>/dev/null || echo "No unused PVs to clean"
+      - echo "Resource cleanup complete"
 
   monitor-platform:
     desc: Continuous monitoring dashboard for platform health
     vars:
       CLUSTER_NAME: '{{.CLUSTER_NAME}}'
     cmds:
-      - echo "📊 Platform Monitoring Dashboard"
+      - echo "Platform Monitoring Dashboard"
       - echo "==============================="
       - echo "Cluster - {{.CLUSTER_NAME}}"
       - echo "Press Ctrl+C to exit"
       - |
         while true; do
           clear
-          echo "📊 IDP Platform Status - $(date)"
+          echo "IDP Platform Status - $(date)"
           echo "================================"
           echo ""
           
           # Cluster status
-          echo "🏗️ Cluster Status:"
+          echo "Cluster Status:"
           kubectl get nodes --no-headers | awk '{print "  " $1 ": " $2}'
           echo ""
           
           # Platform components
-          echo "🚀 Platform Components:"
-          for namespace in argocd crossplane-system backstage; do
+          echo "Platform Components:"
+          for namespace in argocd crossplane backstage; do
             if kubectl get namespace $namespace >/dev/null 2>&1; then
               running=$(kubectl get pods -n $namespace --no-headers | grep -c "Running")
               total=$(kubectl get pods -n $namespace --no-headers | wc -l)
@@ -345,7 +345,7 @@ tasks:
           echo ""
           
           # Resource usage (if metrics available)
-          echo "📈 Resource Usage:"
+          echo "Resource Usage:"
           kubectl top nodes 2>/dev/null | tail -n +2 || echo "  Metrics server not available"
           
           sleep 30
@@ -356,7 +356,7 @@ tasks:
     cmds:
       - |
         cat << 'EOF'
-        🛠️ IDP Builder - Platform Maintenance Workflows
+        IDP Builder - Platform Maintenance Workflows
         ===============================================
         
         HEALTH MONITORING:

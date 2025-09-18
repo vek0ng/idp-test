@@ -25,7 +25,7 @@ tasks:
     vars:
       APP_NAME: '{{.APP_NAME}}'
     cmds:
-      - echo "🧪 Running tests for {{.APP_NAME}}"
+      - echo "Running tests for {{.APP_NAME}}"
       - task: _validate-test-requirements
         vars:
           APP_NAME: '{{.APP_NAME}}'
@@ -35,14 +35,14 @@ tasks:
       - task: integration-test
         vars:
           APP_NAME: '{{.APP_NAME}}'
-      - echo "✅ All tests passed for {{.APP_NAME}}"
+      - echo "All tests passed for {{.APP_NAME}}"
 
   unit-test:
     desc: Run unit tests
     vars:
       APP_NAME: '{{.APP_NAME}}'
     cmds:
-      - echo "🔬 Running unit tests for {{.APP_NAME}}"
+      - echo "Running unit tests for {{.APP_NAME}}"
       - |
         cd apps/{{.APP_NAME}}
         if [ -f "go.mod" ]; then
@@ -63,7 +63,7 @@ tasks:
     vars:
       APP_NAME: '{{.APP_NAME}}'
     cmds:
-      - echo "🔗 Running integration tests for {{.APP_NAME}}"
+      - echo "Running integration tests for {{.APP_NAME}}"
       - task: _run-integration-tests
         vars:
           APP_NAME: '{{.APP_NAME}}'
@@ -79,7 +79,7 @@ tasks:
       IMAGE_TAG: '{{.IMAGE_TAG | default "test"}}'
       TEST_PORT: '{{.TEST_PORT | default "8080"}}'
     cmds:
-      - echo "🐳 Testing container for {{.APP_NAME}}"
+      - echo "Testing container for {{.APP_NAME}}"
       - task: _test-container-build
         vars:
           APP_NAME: '{{.APP_NAME}}'
@@ -89,7 +89,7 @@ tasks:
           APP_NAME: '{{.APP_NAME}}'
           IMAGE_TAG: '{{.IMAGE_TAG}}'
           TEST_PORT: '{{.TEST_PORT}}'
-      - echo "✅ Container tests passed"
+      - echo "Container tests passed"
 
   test-deployment:
     desc: Test Kubernetes deployment
@@ -97,12 +97,12 @@ tasks:
       APP_NAME: '{{.APP_NAME}}'
       NAMESPACE: '{{.NAMESPACE | default (printf "%s-test" .APP_NAME)}}'
     cmds:
-      - echo "☸️ Testing Kubernetes deployment for {{.APP_NAME}}"
+      - echo "Testing Kubernetes deployment for {{.APP_NAME}}"
       - task: _test-k8s-deployment
         vars:
           APP_NAME: '{{.APP_NAME}}'
           NAMESPACE: '{{.NAMESPACE}}'
-      - echo "✅ Deployment tests passed"
+      - echo "Deployment tests passed"
 
   # ===============================
   # Load and Performance Tests
@@ -162,7 +162,7 @@ tasks:
     vars:
       APP_NAME: '{{.APP_NAME}}'
     cmds:
-      - echo "🔍 Running linting for {{.APP_NAME}}"
+      - echo "Running linting for {{.APP_NAME}}"
       - |
         cd apps/{{.APP_NAME}}
         if [ -f "go.mod" ]; then
@@ -194,7 +194,7 @@ tasks:
     vars:
       APP_NAME: '{{.APP_NAME}}'
     cmds:
-      - echo "📊 Generating test coverage for {{.APP_NAME}}"
+      - echo "Generating test coverage for {{.APP_NAME}}"
       - |
         cd apps/{{.APP_NAME}}
         if [ -f "go.mod" ]; then
@@ -211,7 +211,7 @@ tasks:
     vars:
       APP_NAME: '{{.APP_NAME}}'
     cmds:
-      - echo "📋 Generating test report for {{.APP_NAME}}"
+      - echo "Generating test report for {{.APP_NAME}}"
       - |
         echo "Test Report for {{.APP_NAME}}" > test-report.txt
         echo "=========================" >> test-report.txt
@@ -226,7 +226,7 @@ tasks:
         echo "Linting:" >> test-report.txt
         task lint APP_NAME={{.APP_NAME}} >> test-report.txt 2>&1 || echo "Linting issues found" >> test-report.txt
         
-        echo "✅ Test report generated test-report.txt"
+        echo "Test report generated test-report.txt"
 
   # ===============================
   # Test Cleanup and Utilities
@@ -237,7 +237,7 @@ tasks:
     vars:
       APP_NAME: '{{.APP_NAME}}'
     cmds:
-      - echo "🧹 Cleaning test artifacts for {{.APP_NAME}}"
+      - echo "Cleaning test artifacts for {{.APP_NAME}}"
       - |
         cd apps/{{.APP_NAME}} 2>/dev/null || exit 0
         
@@ -250,7 +250,7 @@ tasks:
         docker ps -q --filter "name=test-{{.APP_NAME}}" | xargs -r docker stop
         docker ps -aq --filter "name=test-{{.APP_NAME}}" | xargs -r docker rm
         
-        echo "✅ Test cleanup complete"
+        echo "Test cleanup complete"
 
   # ===============================
   # Internal Helper Tasks
@@ -268,7 +268,7 @@ tasks:
           exit 1
         fi
         
-        echo "✅ Test requirements validated"
+        echo "Test requirements validated"
 
   _run-integration-tests:
     internal: true
@@ -286,7 +286,7 @@ tasks:
         elif [ -f "tests/test_integration.py" ]; then
           python -m pytest tests/test_integration.py -v
         else
-          echo "ℹ️ No integration tests found for {{.APP_NAME}}"
+          echo "No integration tests found for {{.APP_NAME}}"
         fi
 
   _test-container-build:
@@ -315,7 +315,7 @@ tasks:
         
         # Test container response
         if curl -f http://localhost:{{.TEST_PORT}} >/dev/null 2>&1; then
-          echo "✅ Container responding on port {{.TEST_PORT}}"
+          echo "Container responding on port {{.TEST_PORT}}"
         else
           echo "❌ Container not responding"
           docker logs test-{{.APP_NAME}}
@@ -376,7 +376,7 @@ tasks:
       IMAGE_TAG: '{{.IMAGE_TAG}}'
     cmds:
       - |
-        echo "🔍 Scanning {{.APP_NAME}}:{{.IMAGE_TAG}} for vulnerabilities"
+        echo "Scanning {{.APP_NAME}}:{{.IMAGE_TAG}} for vulnerabilities"
         
         # Use trivy if available
         if command -v trivy >/dev/null 2>&1; then

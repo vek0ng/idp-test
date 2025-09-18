@@ -14,7 +14,7 @@ tasks:
     cmds:
       - |
         cat << 'EOF'
-        🏗️ IDP Builder - Workflow Integration
+        IDP Builder - Workflow Integration
         ====================================
         
         PLATFORM SETUP WORKFLOWS:
@@ -41,7 +41,7 @@ tasks:
         
         EXAMPLES:
           # Complete platform setup on AWS
-          task workflows:complete-setup CLUSTER_NAME=prod-aws PROVIDER=aws REGION=us-west-2
+          task workflows:complete-setup CLUSTER_NAME=prod-aws PROVIDER=aws REGION=ap-southeast-1
         
           # Daily maintenance tasks
           task workflows:health-check CLUSTER_NAME=prod-aws
@@ -53,7 +53,7 @@ tasks:
           # Disaster recovery restoration
           task workflows:restore-all CLUSTER_NAME=prod-aws BACKUP_DATE=2024-12-01
         
-        📋 Use 'task workflows:WORKFLOW_NAME:help' for detailed workflow help
+        Use 'task workflows:WORKFLOW_NAME:help' for detailed workflow help
         EOF
 
   # Quick access to main workflows

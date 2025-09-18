@@ -16,7 +16,7 @@ tasks:
       CLUSTER_NAME: '{{.CLUSTER_NAME}}'
       BACKUP_LOCATION: '{{.BACKUP_LOCATION}}'
     cmds:
-      - echo "💾 Full IDP Platform Backup"
+      - echo "Full IDP Platform Backup"
       - echo "==========================="
       - echo "Cluster {{.CLUSTER_NAME}}"
       - echo "Backup Location - {{.BACKUP_LOCATION}}"
@@ -54,7 +54,7 @@ tasks:
           CLUSTER_NAME: '{{.CLUSTER_NAME}}'
           BACKUP_LOCATION: '{{.BACKUP_LOCATION}}'
       - echo ""
-      - echo "✅ Full backup completed successfully"
+      - echo "Full backup completed successfully"
       - task: validate-backup
         vars:
           BACKUP_LOCATION: '{{.BACKUP_LOCATION}}'
@@ -65,7 +65,7 @@ tasks:
       CLUSTER_NAME: '{{.CLUSTER_NAME}}'
       BACKUP_LOCATION: '{{.BACKUP_LOCATION}}'
     cmds:
-      - echo "🏗️ Backing up cluster state"
+      - echo "Backing up cluster state"
       - |
         TIMESTAMP=$(date +%Y-%m-%d-%H%M%S)
         BACKUP_DIR="{{.BACKUP_LOCATION}}/full-backup-$TIMESTAMP"
@@ -88,7 +88,7 @@ tasks:
           kubectl get "$resource" -o yaml > "$BACKUP_DIR/cluster-state/cluster-$resource.yaml" 2>/dev/null || echo "Failed to backup $resource"
         done
         
-        echo "✅ Cluster state backup complete"
+        echo "Cluster state backup complete"
 
   backup-platform-configs:
     desc: Backup all platform component configurations
@@ -96,7 +96,7 @@ tasks:
       CLUSTER_NAME: '{{.CLUSTER_NAME}}'
       BACKUP_LOCATION: '{{.BACKUP_LOCATION}}'
     cmds:
-      - echo "⚙️ Backing up platform configurations"
+      - echo "Backing up platform configurations"
       - |
         TIMESTAMP=$(date +%Y-%m-%d-%H%M%S) 
         BACKUP_DIR="{{.BACKUP_LOCATION}}/full-backup-$TIMESTAMP"
@@ -109,7 +109,7 @@ tasks:
           mkdir -p "$BACKUP_DIR/platform-configs/argocd"
           kubectl get configmap,secret -n argocd -o yaml > "$BACKUP_DIR/platform-configs/argocd/configs-and-secrets.yaml"
           kubectl get application -n argocd -o yaml > "$BACKUP_DIR/platform-configs/argocd/applications.yaml" 2>/dev/null || echo "No ArgoCD applications found"
-          echo "✅ ArgoCD configuration backed up"
+          echo "ArgoCD configuration backed up"
         fi
         
         # Backup Crossplane configuration
@@ -119,17 +119,17 @@ tasks:
           kubectl get providerconfigs -o yaml > "$BACKUP_DIR/platform-configs/crossplane/provider-configs.yaml" 2>/dev/null || echo "No provider configs found"
           kubectl get compositions -o yaml > "$BACKUP_DIR/platform-configs/crossplane/compositions.yaml" 2>/dev/null || echo "No compositions found"
           kubectl get xrds -o yaml > "$BACKUP_DIR/platform-configs/crossplane/composite-resource-definitions.yaml" 2>/dev/null || echo "No XRDs found"
-          echo "✅ Crossplane configuration backed up"
+          echo "Crossplane configuration backed up"
         fi
         
         # Backup Backstage configuration
         if kubectl get namespace backstage >/dev/null 2>&1; then
           mkdir -p "$BACKUP_DIR/platform-configs/backstage"
           kubectl get configmap,secret -n backstage -o yaml > "$BACKUP_DIR/platform-configs/backstage/configs-and-secrets.yaml"
-          echo "✅ Backstage configuration backed up"
+          echo "Backstage configuration backed up"
         fi
         
-        echo "✅ Platform configurations backup complete"
+        echo "Platform configurations backup complete"
 
   backup-application-data:
     desc: Backup application databases and persistent data
@@ -137,7 +137,7 @@ tasks:
       CLUSTER_NAME: '{{.CLUSTER_NAME}}'
       BACKUP_LOCATION: '{{.BACKUP_LOCATION}}'
     cmds:
-      - echo "💾 Backing up application data"
+      - echo "Backing up application data"
       - |
         TIMESTAMP=$(date +%Y-%m-%d-%H%M%S)
         BACKUP_DIR="{{.BACKUP_LOCATION}}/full-backup-$TIMESTAMP"
@@ -149,7 +149,7 @@ tasks:
         if kubectl get pod -n backstage -l app=postgresql >/dev/null 2>&1; then
           POSTGRES_POD=$(kubectl get pod -n backstage -l app=postgresql -o jsonpath='{.items[0].metadata.name}')
           kubectl exec -n backstage "$POSTGRES_POD" -- pg_dump -U postgres backstage > "$BACKUP_DIR/application-data/backstage-database.sql"
-          echo "✅ Backstage database backed up"
+          echo "Backstage database backed up"
         fi
         
         # Backup persistent volume data snapshots info
@@ -158,7 +158,7 @@ tasks:
         # List storage classes
         kubectl get storageclass -o yaml > "$BACKUP_DIR/application-data/storage-classes.yaml"
         
-        echo "✅ Application data backup complete"
+        echo "Application data backup complete"
 
   backup-secrets:
     desc: Backup all secrets and certificates (encrypted)
@@ -166,7 +166,7 @@ tasks:
       CLUSTER_NAME: '{{.CLUSTER_NAME}}'
       BACKUP_LOCATION: '{{.BACKUP_LOCATION}}'
     cmds:
-      - echo "🔐 Backing up secrets and certificates"
+      - echo "Backing up secrets and certificates"
       - |
         TIMESTAMP=$(date +%Y-%m-%d-%H%M%S)
         BACKUP_DIR="{{.BACKUP_LOCATION}}/full-backup-$TIMESTAMP"
@@ -187,7 +187,7 @@ tasks:
         echo "⚠️ WARNING: This backup contains sensitive secrets!" > "$BACKUP_DIR/secrets/README-SECURITY.txt"
         echo "Ensure this backup is stored securely and encrypted!" >> "$BACKUP_DIR/secrets/README-SECURITY.txt"
         
-        echo "✅ Secrets backup complete"
+        echo "Secrets backup complete"
 
   full-restore:
     desc: Restore complete IDP platform from backup
@@ -199,7 +199,7 @@ tasks:
       - test -n "{{.RESTORE_POINT}}" # Require explicit restore point
       - test -d "{{.BACKUP_LOCATION}}/{{.RESTORE_POINT}}" # Backup must exist
     cmds:
-      - echo "🔄 Full IDP Platform Restore"
+      - echo "Full IDP Platform Restore"
       - echo "==========================="
       - echo "Cluster - {{.CLUSTER_NAME}}"
       - echo "Restore Point - {{.RESTORE_POINT}}"
@@ -239,7 +239,7 @@ tasks:
         vars:
           CLUSTER_NAME: '{{.CLUSTER_NAME}}'
       - echo ""
-      - echo "✅ Full restoration completed successfully"
+      - echo "Full restoration completed successfully"
 
   validate-restore-point:
     desc: Validate that restore point contains required backup components
@@ -247,7 +247,7 @@ tasks:
       RESTORE_POINT: '{{.RESTORE_POINT}}'
       BACKUP_LOCATION: '{{.BACKUP_LOCATION}}'
     cmds:
-      - echo "🔍 Validating restore point"
+      - echo "Validating restore point"
       - |
         RESTORE_DIR="{{.BACKUP_LOCATION}}/{{.RESTORE_POINT}}"
         
@@ -265,7 +265,7 @@ tasks:
           fi
         done
         
-        echo "✅ Restore point validation passed"
+        echo "Restore point validation passed"
 
   restore-platform-configs:
     desc: Restore platform component configurations
@@ -274,14 +274,14 @@ tasks:
       RESTORE_POINT: '{{.RESTORE_POINT}}'
       BACKUP_LOCATION: '{{.BACKUP_LOCATION}}'
     cmds:
-      - echo "⚙️ Restoring platform configurations"
+      - echo "Restoring platform configurations"
       - |
         RESTORE_DIR="{{.BACKUP_LOCATION}}/{{.RESTORE_POINT}}"
         
         # Restore ArgoCD configurations
         if [ -f "$RESTORE_DIR/platform-configs/argocd/configs-and-secrets.yaml" ]; then
           kubectl apply -f "$RESTORE_DIR/platform-configs/argocd/configs-and-secrets.yaml"
-          echo "✅ ArgoCD configuration restored"
+          echo "ArgoCD configuration restored"
         fi
         
         # Restore Crossplane configurations
@@ -289,16 +289,16 @@ tasks:
           kubectl apply -f "$RESTORE_DIR/platform-configs/crossplane/providers.yaml"
           kubectl apply -f "$RESTORE_DIR/platform-configs/crossplane/provider-configs.yaml" 2>/dev/null || echo "No provider configs to restore"
           kubectl apply -f "$RESTORE_DIR/platform-configs/crossplane/compositions.yaml" 2>/dev/null || echo "No compositions to restore"
-          echo "✅ Crossplane configuration restored"
+          echo "Crossplane configuration restored"
         fi
         
         # Restore Backstage configurations
         if [ -f "$RESTORE_DIR/platform-configs/backstage/configs-and-secrets.yaml" ]; then
           kubectl apply -f "$RESTORE_DIR/platform-configs/backstage/configs-and-secrets.yaml"
-          echo "✅ Backstage configuration restored"
+          echo "Backstage configuration restored"
         fi
         
-        echo "✅ Platform configurations restore complete"
+        echo "Platform configurations restore complete"
 
   restore-application-data:
     desc: Restore application databases and persistent data
@@ -307,14 +307,14 @@ tasks:
       RESTORE_POINT: '{{.RESTORE_POINT}}'
       BACKUP_LOCATION: '{{.BACKUP_LOCATION}}'
     cmds:
-      - echo "💾 Restoring application data"
+      - echo "Restoring application data"
       - |
         RESTORE_DIR="{{.BACKUP_LOCATION}}/{{.RESTORE_POINT}}"
         
         # Restore persistent volumes
         if [ -f "$RESTORE_DIR/application-data/persistent-volumes.yaml" ]; then
           kubectl apply -f "$RESTORE_DIR/application-data/persistent-volumes.yaml"
-          echo "✅ Persistent volumes restored"
+          echo "Persistent volumes restored"
         fi
         
         # Restore Backstage database if backup exists
@@ -323,10 +323,10 @@ tasks:
           kubectl exec -n backstage "$POSTGRES_POD" -- psql -U postgres -c "DROP DATABASE IF EXISTS backstage;"
           kubectl exec -n backstage "$POSTGRES_POD" -- psql -U postgres -c "CREATE DATABASE backstage;"
           kubectl exec -i -n backstage "$POSTGRES_POD" -- psql -U postgres backstage < "$RESTORE_DIR/application-data/backstage-database.sql"
-          echo "✅ Backstage database restored"
+          echo "Backstage database restored"
         fi
         
-        echo "✅ Application data restore complete"
+        echo "Application data restore complete"
 
   restore-secrets:
     desc: Restore secrets and certificates
@@ -335,7 +335,7 @@ tasks:
       RESTORE_POINT: '{{.RESTORE_POINT}}'
       BACKUP_LOCATION: '{{.BACKUP_LOCATION}}'
     cmds:
-      - echo "🔐 Restoring secrets and certificates"
+      - echo "Restoring secrets and certificates"
       - |
         RESTORE_DIR="{{.BACKUP_LOCATION}}/{{.RESTORE_POINT}}"
         
@@ -343,29 +343,29 @@ tasks:
         if [ -f "$RESTORE_DIR/secrets/all-secrets.yaml" ]; then
           echo "⚠️ Restoring all secrets - this will overwrite existing secrets"
           kubectl apply -f "$RESTORE_DIR/secrets/all-secrets.yaml"
-          echo "✅ Secrets restored"
+          echo "Secrets restored"
         fi
         
         # Restore certificates
         if [ -f "$RESTORE_DIR/secrets/certificates.yaml" ]; then
           kubectl apply -f "$RESTORE_DIR/secrets/certificates.yaml"
-          echo "✅ Certificates restored"
+          echo "Certificates restored"
         fi
         
         # Restore service accounts
         if [ -f "$RESTORE_DIR/secrets/service-accounts.yaml" ]; then
           kubectl apply -f "$RESTORE_DIR/secrets/service-accounts.yaml"
-          echo "✅ Service accounts restored"
+          echo "Service accounts restored"
         fi
         
-        echo "✅ Secrets restore complete"
+        echo "Secrets restore complete"
 
   validate-restoration:
     desc: Validate that restoration was successful
     vars:
       CLUSTER_NAME: '{{.CLUSTER_NAME}}'
     cmds:
-      - echo "✅ Validating restoration"
+      - echo "Validating restoration"
       - |
         echo "Checking platform component health..."
         
@@ -374,33 +374,33 @@ tasks:
         
         # Check ArgoCD
         if kubectl get pods -n argocd --no-headers | grep -q "Running"; then
-          echo "✅ ArgoCD pods running"
+          echo "ArgoCD pods running"
         else
           echo "⚠️ ArgoCD pods not ready yet"
         fi
         
         # Check Crossplane
         if kubectl get pods -n crossplane-system --no-headers | grep -q "Running"; then
-          echo "✅ Crossplane pods running"
+          echo "Crossplane pods running"
         else
           echo "⚠️ Crossplane pods not ready yet"
         fi
         
         # Check Backstage
         if kubectl get pods -n backstage --no-headers | grep -q "Running"; then
-          echo "✅ Backstage pods running"
+          echo "Backstage pods running"
         else
           echo "⚠️ Backstage pods not ready yet"
         fi
         
-        echo "✅ Restoration validation complete"
+        echo "Restoration validation complete"
 
   list-backups:
     desc: List available backup restore points
     vars:
       BACKUP_LOCATION: '{{.BACKUP_LOCATION}}'
     cmds:
-      - echo "📋 Available Backup Restore Points"
+      - echo "Available Backup Restore Points"
       - echo "=================================="
       - |
         if [ -d "{{.BACKUP_LOCATION}}" ]; then
@@ -408,7 +408,7 @@ tasks:
             if [ -d "$backup" ]; then
               backup_name=$(basename "$backup")
               if [ -f "$backup/backup-info.txt" ]; then
-                echo "📦 $backup_name"
+                echo "$backup_name"
                 echo "   Timestamp: $(head -n1 $backup/backup-info.txt)"
                 echo "   Cluster: $(sed -n '2p' $backup/backup-info.txt)"
                 echo "   Provider: $(sed -n '3p' $backup/backup-info.txt)"
@@ -425,7 +425,7 @@ tasks:
     vars:
       BACKUP_LOCATION: '{{.BACKUP_LOCATION}}'
     cmds:
-      - echo "🔍 Validating backup integrity"
+      - echo "Validating backup integrity"
       - |
         # Find the latest backup
         LATEST_BACKUP=$(ls -t {{.BACKUP_LOCATION}}/full-backup-* 2>/dev/null | head -n1)
@@ -443,22 +443,22 @@ tasks:
             echo "❌ Missing directory: $dir"
             exit 1
           else
-            echo "✅ Directory exists: $dir"
+            echo "Directory exists: $dir"
           fi
         done
         
         # Check file sizes
         total_size=$(du -sh "$LATEST_BACKUP" | cut -f1)
-        echo "✅ Backup size: $total_size"
+        echo "Backup size: $total_size"
         
-        echo "✅ Backup validation passed"
+        echo "Backup validation passed"
 
   help:
     desc: Show disaster recovery workflow help and examples
     cmds:
       - |
         cat << 'EOF'
-        🚨 IDP Builder - Disaster Recovery Workflows
+        IDP Builder - Disaster Recovery Workflows
         ============================================
         
         BACKUP OPERATIONS:

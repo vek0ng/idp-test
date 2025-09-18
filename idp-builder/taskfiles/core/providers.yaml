@@ -26,6 +26,7 @@ tasks:
 
   select-provider:
     desc: Interactively select and configure cloud provider
+    silent: true
     aliases: [select]
     cmds:
       - task: _show-provider-menu
@@ -35,6 +36,7 @@ tasks:
 
   set-provider:
     desc: Set provider directly without interactive prompt (PROVIDER required)
+    silent: true
     vars:
       PROVIDER: '{{.PROVIDER}}'
     preconditions:
@@ -51,6 +53,7 @@ tasks:
 
   show-provider-status:
     desc: Show current provider configuration and status
+    silent: true
     aliases: [show, status]
     cmds:
       - |
@@ -60,9 +63,9 @@ tasks:
         if [ -f .env ] && grep -q "PROVIDER=" .env; then
           CURRENT=$(grep "PROVIDER=" .env | cut -d'=' -f2)
           echo "  Provider: $CURRENT"
-          echo "  Cluster {{.CLUSTER_NAME}}"
-          echo "  Environment {{.ENVIRONMENT}}"
-          echo "  Region {{.REGION}}"
+          echo "  Cluster: {{.CLUSTER_NAME}}"
+          echo "  Environment: {{.ENVIRONMENT}}"
+          echo "  Region: {{.REGION}}"
           echo ""
         else
           echo "  No provider configured (using default {{.PROVIDER}})"
@@ -74,24 +77,26 @@ tasks:
 
   validate-provider:
     desc: Validate provider configuration and credentials
+    silent: true
     vars:
       PROVIDER: '{{.PROVIDER}}'
     cmds:
-      - echo "🔍 Validating provider configuration for {{.PROVIDER}}"
+      - echo "Validating provider configuration for {{.PROVIDER}}"
       - task: _validate-provider
         vars:
           PROVIDER: '{{.PROVIDER}}'
       - task: _validate-provider-credentials
         vars:
           PROVIDER: '{{.PROVIDER}}'
-      - echo "✅ Provider {{.PROVIDER}} validation complete"
+      - echo "Provider {{.PROVIDER}} validation complete"
 
   list-providers:
-    desc: List all supported cloud providers with descriptions
+    desc: List available cloud providers and their requirements
+    silent: true
     cmds:
       - |
         cat << 'EOF'
-        ☁️ Supported Cloud Providers:
+        Supported Cloud Providers:
         ============================
         
         🏠 kind     - Kubernetes in Docker (local development)
@@ -99,17 +104,17 @@ tasks:
                      • No cloud account required
                      • Runs locally on your machine
         
-        ☁️ aws      - Amazon Web Services
+        aws      - Amazon Web Services
                      • Production-ready EKS clusters
                      • Requires AWS account and credentials
                      • Supports auto-scaling and managed services
         
-        ☁️ gcp      - Google Cloud Platform
+        gcp      - Google Cloud Platform
                      • Production-ready GKE clusters  
                      • Requires GCP project and credentials
                      • Supports auto-scaling and managed services
         
-        ☁️ azure    - Microsoft Azure
+        azure    - Microsoft Azure
                      • Production-ready AKS clusters
                      • Requires Azure account and credentials
                      • Supports auto-scaling and managed services
@@ -126,10 +131,11 @@ tasks:
 
   configure-aws:
     desc: Configure AWS provider settings
+    silent: true
     vars:
       REGION: '{{.REGION | default "ap-southeast-1"}}'
     cmds:
-      - echo "🔧 Configuring AWS provider..."
+      - echo "Configuring AWS provider..."
       - task: set-provider
         vars:
           PROVIDER: aws
@@ -139,11 +145,12 @@ tasks:
 
   configure-gcp:
     desc: Configure GCP provider settings  
+    silent: true
     vars:
       REGION: '{{.REGION | default "us-central1"}}'
       PROJECT_ID: '{{.PROJECT_ID}}'
     cmds:
-      - echo "🔧 Configuring GCP provider..."
+      - echo "Configuring GCP provider..."
       - task: set-provider
         vars:
           PROVIDER: gcp
@@ -154,10 +161,12 @@ tasks:
 
   configure-azure:
     desc: Configure Azure provider settings
+    silent: true
     vars:
-      REGION: '{{.REGION | default "eastus"}}'
+      LOCATION: '{{.LOCATION | default "eastus"}}'
+      SUBSCRIPTION_ID: '{{.SUBSCRIPTION_ID}}'
     cmds:
-      - echo "🔧 Configuring Azure provider..."
+      - echo "Configuring Azure provider..."
       - task: set-provider
         vars:
           PROVIDER: azure
@@ -168,7 +177,7 @@ tasks:
   configure-kind:
     desc: Configure Kind provider settings (local development)
     cmds:
-      - echo "🔧 Configuring Kind provider..."
+      - echo "Configuring Kind provider..."
       - task: set-provider
         vars:
           PROVIDER: kind
@@ -180,6 +189,7 @@ tasks:
 
   _show-provider-menu:
     internal: true
+    silent: true
     cmds:
       - |
         cat << 'EOF'
@@ -199,6 +209,7 @@ tasks:
 
   _interactive-provider-selection:
     internal: true
+    silent: true
     cmds:
       - |
         echo -n "Enter your choice (1-4): "
@@ -214,13 +225,14 @@ tasks:
 
   _save-provider-choice:
     internal: true
+    silent: true
     cmds:
       - |
         if [ -f .provider-tmp ]; then
           source .provider-tmp
           rm .provider-tmp
           echo "PROVIDER=$SELECTED_PROVIDER" >> .env
-          echo -e "{{.COLOR_GREEN}}✅ Provider set to: $SELECTED_PROVIDER{{.COLOR_RESET}}"
+          echo -e "{{.COLOR_GREEN}}Provider set to: $SELECTED_PROVIDER{{.COLOR_RESET}}"
         else
           echo "❌ No provider selection found"
           exit 1
@@ -228,13 +240,14 @@ tasks:
 
   _validate-provider:
     internal: true
+    silent: true
     vars:
       PROVIDER: '{{.PROVIDER}}'
     cmds:
       - |
         case "{{.PROVIDER}}" in
           kind|aws|gcp|azure)
-            echo "✅ Provider {{.PROVIDER}} is valid"
+            echo "Provider {{.PROVIDER}} is valid"
             ;;
           *)
             echo "❌ Invalid provider {{.PROVIDER}}"
@@ -245,6 +258,7 @@ tasks:
 
   _save-provider-to-env:
     internal: true
+    silent: true
     vars:
       PROVIDER: '{{.PROVIDER}}'
     cmds:
@@ -259,10 +273,11 @@ tasks:
         
         # Add new provider line
         echo "PROVIDER={{.PROVIDER}}" >> .env
-        echo -e "{{.COLOR_GREEN}}✅ Provider set to: {{.PROVIDER}}{{.COLOR_RESET}}"
+        echo -e "{{.COLOR_GREEN}}Provider set to: {{.PROVIDER}}{{.COLOR_RESET}}"
 
   _show-provider-status-details:
     internal: true  
+    silent: true
     vars:
       PROVIDER: '{{.PROVIDER}}'
     cmds:
@@ -271,9 +286,9 @@ tasks:
           kind)
             echo -e "{{.COLOR_BLUE}}Kind Status:{{.COLOR_RESET}}"
             if command -v kind >/dev/null 2>&1; then
-              echo "  ✅ kind CLI available"
+              echo "  kind CLI available"
               if kind get clusters 2>/dev/null | grep -q "{{.CLUSTER_NAME}}"; then
-                echo "  ✅ Cluster {{.CLUSTER_NAME}} exists"
+                echo "  Cluster {{.CLUSTER_NAME}} exists"
               else
                 echo "  ⚠️ Cluster {{.CLUSTER_NAME}} not found"
               fi
@@ -284,9 +299,9 @@ tasks:
           aws)
             echo -e "{{.COLOR_BLUE}}AWS Status:{{.COLOR_RESET}}"
             if command -v aws >/dev/null 2>&1; then
-              echo "  ✅ AWS CLI available"
+              echo "  AWS CLI available"
               if aws sts get-caller-identity >/dev/null 2>&1; then
-                echo "  ✅ AWS credentials configured"
+                echo "  AWS credentials configured"
               else
                 echo "  ❌ AWS credentials not configured"
               fi
@@ -297,9 +312,9 @@ tasks:
           gcp)
             echo -e "{{.COLOR_BLUE}}GCP Status:{{.COLOR_RESET}}"
             if command -v gcloud >/dev/null 2>&1; then
-              echo "  ✅ gcloud CLI available"
+              echo "  gcloud CLI available"
               if gcloud auth list --filter=status:ACTIVE --format="value(account)" | head -n1 >/dev/null 2>&1; then
-                echo "  ✅ GCP credentials configured"
+                echo "  GCP credentials configured"
               else
                 echo "  ❌ GCP credentials not configured"
               fi
@@ -310,9 +325,9 @@ tasks:
           azure)
             echo -e "{{.COLOR_BLUE}}Azure Status:{{.COLOR_RESET}}"
             if command -v az >/dev/null 2>&1; then
-              echo "  ✅ Azure CLI available"
+              echo "  Azure CLI available"
               if az account show >/dev/null 2>&1; then
-                echo "  ✅ Azure credentials configured"
+                echo "  Azure credentials configured"
               else
                 echo "  ❌ Azure credentials not configured"
               fi
@@ -324,17 +339,18 @@ tasks:
 
   _validate-provider-credentials:
     internal: true
+    silent: true
     vars:
       PROVIDER: '{{.PROVIDER}}'
     cmds:
       - |
         case "{{.PROVIDER}}" in
           kind)
-            echo "✅ Kind provider - no credentials required"
+            echo "Kind provider - no credentials required"
             ;;
           aws)
             if command -v aws >/dev/null 2>&1 && aws sts get-caller-identity >/dev/null 2>&1; then
-              echo "✅ AWS credentials validated"
+              echo "AWS credentials validated"
             else
               echo "❌ AWS credentials validation failed"
               exit 1
@@ -342,7 +358,7 @@ tasks:
             ;;
           gcp)
             if command -v gcloud >/dev/null 2>&1 && gcloud auth list --filter=status:ACTIVE --format="value(account)" | head -n1 >/dev/null 2>&1; then
-              echo "✅ GCP credentials validated"
+              echo "GCP credentials validated"
             else
               echo "❌ GCP credentials validation failed"
               exit 1
@@ -350,7 +366,7 @@ tasks:
             ;;
           azure)
             if command -v az >/dev/null 2>&1 && az account show >/dev/null 2>&1; then
-              echo "✅ Azure credentials validated"
+              echo "Azure credentials validated"
             else
               echo "❌ Azure credentials validation failed"
               exit 1
@@ -360,6 +376,7 @@ tasks:
 
   _configure-aws-specific:
     internal: true
+    silent: true
     vars:
       REGION: '{{.REGION}}'
     cmds:
@@ -374,6 +391,7 @@ tasks:
 
   _configure-gcp-specific:
     internal: true
+    silent: true
     vars:
       REGION: '{{.REGION}}'
       PROJECT_ID: '{{.PROJECT_ID}}'
@@ -396,6 +414,7 @@ tasks:
 
   _configure-azure-specific:
     internal: true
+    silent: true
     vars:
       REGION: '{{.REGION}}'
     cmds:
@@ -409,6 +428,7 @@ tasks:
 
   _configure-kind-specific:
     internal: true
+    silent: true
     cmds:
       - |
         echo "  Kind provider configured for local development"

@@ -10,6 +10,9 @@ vars:
   PROVIDER: '{{.PROVIDER | default "kind"}}'
   ENVIRONMENT: '{{.ENVIRONMENT | default "dev"}}'
   REGION: '{{.REGION | default "ap-southeast-1"}}'
+  
+  # Global Silent Mode Control
+  SILENT_MODE: '{{.SILENT_MODE | default "true"}}'
 
 env:
   # Platform environment variables
@@ -53,6 +56,7 @@ tasks:
   default:
     desc: Show help and available commands
     aliases: [help, list]
+    silent: true
     cmds:
       - task: _show-help
 
@@ -63,23 +67,28 @@ tasks:
   check-prerequisites:
     desc: Check all prerequisites for IDP platform setup
     aliases: [check-prereqs, prereqs]
+    silent: true
     vars:
       PROVIDER: '{{.PROVIDER}}'
       ENVIRONMENT: '{{.ENVIRONMENT}}'
+      SILENT_MODE: '{{.SILENT_MODE}}'
     cmds:
       - task: prerequisites:check-prerequisites
         vars:
           PROVIDER: '{{.PROVIDER}}'
           ENVIRONMENT: '{{.ENVIRONMENT}}'
+          SILENT_MODE: '{{.SILENT_MODE}}'
 
   setup-environment:
     desc: Setup and validate environment configuration
     aliases: [setup-env, env]
+    silent: true
     vars:
       CLUSTER_NAME: '{{.CLUSTER_NAME}}'
       PROVIDER: '{{.PROVIDER}}'
       ENVIRONMENT: '{{.ENVIRONMENT}}'
       REGION: '{{.REGION}}'
+      SILENT_MODE: '{{.SILENT_MODE}}'
     cmds:
       - task: environment:validate
         vars:
@@ -87,20 +96,31 @@ tasks:
           PROVIDER: '{{.PROVIDER}}'
           ENVIRONMENT: '{{.ENVIRONMENT}}'
           REGION: '{{.REGION}}'
+          SILENT_MODE: '{{.SILENT_MODE}}'
       - task: environment:show-config
+        vars:
+          CLUSTER_NAME: '{{.CLUSTER_NAME}}'
+          PROVIDER: '{{.PROVIDER}}'
+          ENVIRONMENT: '{{.ENVIRONMENT}}'
+          REGION: '{{.REGION}}'
+          SILENT_MODE: '{{.SILENT_MODE}}'
 
   configure-provider:
     desc: Configure cloud provider settings
     aliases: [setup-provider, provider]
+    silent: true
     vars:
       PROVIDER: '{{.PROVIDER}}'
+      SILENT_MODE: '{{.SILENT_MODE}}'
     cmds:
       - task: providers:set-provider
         vars:
           PROVIDER: '{{.PROVIDER}}'
+          SILENT_MODE: '{{.SILENT_MODE}}'
       - task: providers:validate-provider
         vars:
           PROVIDER: '{{.PROVIDER}}'
+          SILENT_MODE: '{{.SILENT_MODE}}'
 
   # ===============================
   # Infrastructure Management Tasks  
@@ -108,11 +128,13 @@ tasks:
 
   create-cluster:
     desc: Create Kubernetes cluster (CLUSTER_NAME and PROVIDER required)
+    silent: true
     vars:
       CLUSTER_NAME: '{{.CLUSTER_NAME}}'
       PROVIDER: '{{.PROVIDER}}'
       ENVIRONMENT: '{{.ENVIRONMENT}}'
       REGION: '{{.REGION}}'
+      SILENT_MODE: '{{.SILENT_MODE}}'
     cmds:
       - task: cluster:create-cluster
         vars:
@@ -120,99 +142,207 @@ tasks:
           PROVIDER: '{{.PROVIDER}}'
           ENVIRONMENT: '{{.ENVIRONMENT}}'
           REGION: '{{.REGION}}'
+          SILENT_MODE: '{{.SILENT_MODE}}'
 
   setup-networking:
     desc: Setup networking and ingress for the cluster
+    silent: true
     vars:
       PROVIDER: '{{.PROVIDER}}'
       INGRESS_CLASS: '{{.INGRESS_CLASS | default "nginx"}}'
+      # SILENT_MODE: '{{.SILENT_MODE}}'
     cmds:
       - task: networking:install-ingress
         vars:
           PROVIDER: '{{.PROVIDER}}'
           INGRESS_CLASS: '{{.INGRESS_CLASS}}'
+          # SILENT_MODE: '{{.SILENT_MODE}}'
 
   setup-storage:
     desc: Setup storage classes and persistent volumes
+    silent: true
     vars:
       PROVIDER: '{{.PROVIDER}}'
-      ENVIRONMENT: '{{.ENVIRONMENT}}'
+      # ENVIRONMENT: '{{.ENVIRONMENT}}'
+      # SILENT_MODE: '{{.SILENT_MODE}}'
     cmds:
       - task: storage:setup-storage
         vars:
           PROVIDER: '{{.PROVIDER}}'
-          ENVIRONMENT: '{{.ENVIRONMENT}}'
+          # ENVIRONMENT: '{{.ENVIRONMENT}}'
+          # SILENT_MODE: '{{.SILENT_MODE}}'
 
   # ===============================
   # Platform Management Tasks
   # ===============================
 
   install-gitops:
-    desc: Install ArgoCD GitOps platform
+    desc: Install ArgoCD GitOps platform. TODO - Clean up vars
     aliases: [install-argocd]
+    silent: true
     vars:
-      CLUSTER_NAME: '{{.CLUSTER_NAME}}'
-      PROVIDER: '{{.PROVIDER}}'
-      NAMESPACE: '{{.NAMESPACE | default "argocd"}}'
+      # CLUSTER_NAME: '{{.CLUSTER_NAME}}'
+      # PROVIDER: '{{.PROVIDER}}'
+      # ARGO_NAMESPACE: 'argocd'
+      NAMESPACE: '{{.ARGO_NAMESPACE | default "argocd"}}'
+      # SILENT_MODE: '{{.SILENT_MODE}}'
     cmds:
       - task: gitops:install-argocd
         vars:
-          CLUSTER_NAME: '{{.CLUSTER_NAME}}'
-          PROVIDER: '{{.PROVIDER}}'
+          # CLUSTER_NAME: '{{.CLUSTER_NAME}}'
+          # PROVIDER: '{{.PROVIDER}}'
+          # ARGO_NAMESPACE: '{{.ARGO_NAMESPACE}}'
           NAMESPACE: '{{.NAMESPACE}}'
+          # SILENT_MODE: '{{.SILENT_MODE}}'
 
   install-crossplane:
-    desc: Install Crossplane Infrastructure as Code platform
+    desc: Install Crossplane Infrastructure as Code platform. TODO - Clean up vars
     aliases: [install-iac]
+    silent: true
     vars:
-      CLUSTER_NAME: '{{.CLUSTER_NAME}}'
+      # CLUSTER_NAME: '{{.CLUSTER_NAME}}'
       PROVIDER: '{{.PROVIDER}}'
       NAMESPACE: '{{.NAMESPACE | default "crossplane-system"}}'
+      # SILENT_MODE: '{{.SILENT_MODE}}'
     cmds:
       - task: crossplane:install-crossplane
         vars:
-          CLUSTER_NAME: '{{.CLUSTER_NAME}}'
+          # CLUSTER_NAME: '{{.CLUSTER_NAME}}'
           PROVIDER: '{{.PROVIDER}}'
           NAMESPACE: '{{.NAMESPACE}}'
+          # SILENT_MODE: '{{.SILENT_MODE}}'
 
   install-backstage:
-    desc: Install Backstage Developer Portal
+    desc: Install Backstage Developer Portal (placeholder - see upgrade-backstage-production)
     aliases: [install-portal]
+    silent: true
     vars:
       CLUSTER_NAME: '{{.CLUSTER_NAME}}'
       PROVIDER: '{{.PROVIDER}}'
       NAMESPACE: '{{.NAMESPACE | default "backstage"}}'
+      # SILENT_MODE: '{{.SILENT_MODE}}'
     cmds:
       - task: backstage:install-backstage
         vars:
           CLUSTER_NAME: '{{.CLUSTER_NAME}}'
           PROVIDER: '{{.PROVIDER}}'
           NAMESPACE: '{{.NAMESPACE}}'
+          # SILENT_MODE: '{{.SILENT_MODE}}'
+
+  upgrade-backstage-production:
+    desc: Upgrade Backstage placeholder to production image
+    silent: true
+    vars:
+      # CLUSTER_NAME: '{{.CLUSTER_NAME}}'
+      NAMESPACE: '{{.BACKSTAGE_NAMESPACE | default "backstage"}}'
+      # Use a demo-ready Backstage image instead of base image
+      IMAGE: '{{.BACKSTAGE_IMAGE | default "roadiehq/backstage-demo:latest"}}'
+      POSTGRES_PASSWORD: '{{.POSTGRES_PASSWORD | default "backstage123"}}'
+    preconditions:
+      - sh: '[ -n "{{.IMAGE}}" ]'
+        msg: "IMAGE cannot be empty. Set BACKSTAGE_IMAGE environment variable or pass IMAGE=your-image"
+    cmds:
+      - task: backstage:upgrade-to-production
+        vars:
+          # CLUSTER_NAME: '{{.CLUSTER_NAME}}'
+          NAMESPACE: '{{.NAMESPACE}}'
+          IMAGE: '{{.IMAGE}}'
+          POSTGRES_PASSWORD: '{{.POSTGRES_PASSWORD}}'
+
+  install-backstage-production:
+    desc: Install Backstage Developer Portal directly with production image (streamlined)
+    silent: true
+    vars:
+      NAMESPACE: '{{.BACKSTAGE_NAMESPACE | default "backstage"}}'
+      IMAGE: '{{.BACKSTAGE_IMAGE | default "roadiehq/backstage-demo:latest"}}'
+      DATABASE: '{{.DATABASE | default "postgres"}}'
+      ENABLE_INGRESS: '{{.ENABLE_INGRESS | default "true"}}'
+      POSTGRES_PASSWORD: '{{.POSTGRES_PASSWORD | default "backstage123"}}'
+    preconditions:
+      - sh: '[ -n "{{.IMAGE}}" ]'
+        msg: "IMAGE is required. Set BACKSTAGE_IMAGE environment variable or pass IMAGE=your-image"
+    cmds:
+      - task: backstage:install-backstage-production
+        vars:
+          NAMESPACE: '{{.NAMESPACE}}'
+          IMAGE: '{{.IMAGE}}'
+          DATABASE: '{{.DATABASE}}'
+          ENABLE_INGRESS: '{{.ENABLE_INGRESS}}'
+          POSTGRES_PASSWORD: '{{.POSTGRES_PASSWORD}}'
+
+  create-backstage-app:
+    desc: Create a new Backstage application with IDP integration
+    silent: true
+    vars:
+      APP_NAME: '{{.APP_NAME | default "my-backstage-app"}}'
+      GITHUB_TOKEN: '{{.GITHUB_TOKEN}}'
+      REGISTRY: '{{.REGISTRY | default "localhost:5000"}}'
+      ENABLE_ARGOCD_PLUGIN: '{{.ENABLE_ARGOCD_PLUGIN | default "true"}}'
+      ENABLE_KUBERNETES_PLUGIN: '{{.ENABLE_KUBERNETES_PLUGIN | default "true"}}'
+      ENABLE_CROSSPLANE_PLUGIN: '{{.ENABLE_CROSSPLANE_PLUGIN | default "true"}}'
+    preconditions:
+      - sh: '[ -n "{{.APP_NAME}}" ]'
+        msg: "APP_NAME is required. Usage: task create-backstage-app APP_NAME=my-app"
+    cmds:
+      - task: backstage:create-backstage-app
+        vars:
+          APP_NAME: '{{.APP_NAME}}'
+          GITHUB_TOKEN: '{{.GITHUB_TOKEN}}'
+          REGISTRY: '{{.REGISTRY}}'
+          ENABLE_ARGOCD_PLUGIN: '{{.ENABLE_ARGOCD_PLUGIN}}'
+          ENABLE_KUBERNETES_PLUGIN: '{{.ENABLE_KUBERNETES_PLUGIN}}'
+          ENABLE_CROSSPLANE_PLUGIN: '{{.ENABLE_CROSSPLANE_PLUGIN}}'
+
+  build-and-deploy-backstage:
+    desc: Build and deploy Backstage app via ArgoCD
+    silent: true
+    vars:
+      APP_NAME: '{{.APP_NAME}}'
+      IMAGE_TAG: '{{.IMAGE_TAG | default "latest"}}'
+      REGISTRY: '{{.REGISTRY | default "localhost:5000"}}'
+      NAMESPACE: '{{.NAMESPACE | default "backstage"}}'
+      ENVIRONMENT: '{{.ENVIRONMENT | default "dev"}}'
+    preconditions:
+      - sh: '[ -n "{{.APP_NAME}}" ]'
+        msg: "APP_NAME is required. Usage: task build-and-deploy-backstage APP_NAME=my-app"
+    cmds:
+      - task: backstage:build-and-deploy
+        vars:
+          APP_NAME: '{{.APP_NAME}}'
+          IMAGE_TAG: '{{.IMAGE_TAG}}'
+          REGISTRY: '{{.REGISTRY}}'
+          NAMESPACE: '{{.NAMESPACE}}'
+          ENVIRONMENT: '{{.ENVIRONMENT}}'
 
   install-all-platforms:
     desc: Install all platform components (ArgoCD, Crossplane, Backstage)
+    silent: true
     vars:
       CLUSTER_NAME: '{{.CLUSTER_NAME}}'
       PROVIDER: '{{.PROVIDER}}'
+      SILENT_MODE: '{{.SILENT_MODE}}'
     cmds:
-      - echo "🚀 Installing all platform components for cluster {{.CLUSTER_NAME}}"
-      - echo "========================================================="
+      - if [ "{{.SILENT_MODE}}" != "true" ]; then echo "Installing all platform components for cluster {{.CLUSTER_NAME}}"; fi
+      - if [ "{{.SILENT_MODE}}" != "true" ]; then echo "========================================================="; fi
       - task: install-gitops
         vars:
           CLUSTER_NAME: '{{.CLUSTER_NAME}}'
           PROVIDER: '{{.PROVIDER}}'
+          SILENT_MODE: '{{.SILENT_MODE}}'
       - task: install-crossplane
         vars:
           CLUSTER_NAME: '{{.CLUSTER_NAME}}'
           PROVIDER: '{{.PROVIDER}}'
+          SILENT_MODE: '{{.SILENT_MODE}}'
       - task: install-backstage
         vars:
           CLUSTER_NAME: '{{.CLUSTER_NAME}}'
           PROVIDER: '{{.PROVIDER}}'
-      - echo ""
-      - echo "✅ All platform components installed successfully!"
-      - echo "ArgoCD GitOps kubectl port-forward svc/argocd-server -n argocd 8080:443"
-      - echo "Backstage Portal kubectl port-forward svc/backstage -n backstage 3000:80"
+          SILENT_MODE: '{{.SILENT_MODE}}'
+      - if [ "{{.SILENT_MODE}}" != "true" ]; then echo ""; fi
+      - if [ "{{.SILENT_MODE}}" != "true" ]; then echo "All platform components installed successfully!"; fi
+      - if [ "{{.SILENT_MODE}}" != "true" ]; then echo "ArgoCD GitOps kubectl port-forward svc/argocd-server -n argocd 8080:443"; fi
+      - if [ "{{.SILENT_MODE}}" != "true" ]; then echo "Backstage Portal kubectl port-forward svc/backstage -n backstage 3000:80"; fi
 
   # ===============================
   # Quick Setup Workflows
@@ -220,93 +350,119 @@ tasks:
 
   quick-setup:
     desc: Quick setup for development - creates complete infrastructure stack
+    silent: true
     vars:
       CLUSTER_NAME: '{{.CLUSTER_NAME | default "quick-demo"}}'
       PROVIDER: '{{.PROVIDER | default "kind"}}'
       ENVIRONMENT: '{{.ENVIRONMENT | default "dev"}}'
+      SILENT_MODE: '{{.SILENT_MODE}}'
     cmds:
-      - echo "🚀 Quick Setup for {{.PROVIDER}} provider"
-      - echo "================================="
-      - echo "Creating complete infrastructure stack..."
-      - echo ""
+      - if [ "{{.SILENT_MODE}}" != "true" ]; then echo "Quick Setup for {{.PROVIDER}} provider"; fi
+      - if [ "{{.SILENT_MODE}}" != "true" ]; then echo "================================="; fi
+      - if [ "{{.SILENT_MODE}}" != "true" ]; then echo "Creating complete infrastructure stack..."; fi
+      - if [ "{{.SILENT_MODE}}" != "true" ]; then echo ""; fi
       - task: check-prerequisites
         vars:
           PROVIDER: '{{.PROVIDER}}'
+          SILENT_MODE: '{{.SILENT_MODE}}'
       - task: create-cluster
         vars:
           CLUSTER_NAME: '{{.CLUSTER_NAME}}'
           PROVIDER: '{{.PROVIDER}}'
           ENVIRONMENT: '{{.ENVIRONMENT}}'
+          SILENT_MODE: '{{.SILENT_MODE}}'
       - task: setup-networking
         vars:
           PROVIDER: '{{.PROVIDER}}'
+          SILENT_MODE: '{{.SILENT_MODE}}'
       - task: setup-storage
         vars:
           PROVIDER: '{{.PROVIDER}}'
           ENVIRONMENT: '{{.ENVIRONMENT}}'
-      - echo ""
-      - echo "✅ Quick setup complete!"
-      - echo "Cluster {{.CLUSTER_NAME}} is ready for platform installation (Phase 3)"
+          SILENT_MODE: '{{.SILENT_MODE}}'
+      - if [ "{{.SILENT_MODE}}" != "true" ]; then echo ""; fi
+      - if [ "{{.SILENT_MODE}}" != "true" ]; then echo "Quick setup complete!"; fi
+      - if [ "{{.SILENT_MODE}}" != "true" ]; then echo "Cluster {{.CLUSTER_NAME}} is ready for platform installation (Phase 3)"; fi
 
   validate-structure:
     desc: Validate the directory structure
+    silent: true
+    vars:
+      SILENT_MODE: '{{.SILENT_MODE}}'
     cmds:
-      - echo "🔍 Validating IDP Builder directory structure..."
+      - if [ "{{.SILENT_MODE}}" != "true" ]; then echo "Validating IDP Builder directory structure..."; fi
       - |
         required_dirs=("taskfiles" "configs" "scripts" "examples" "docs")
         for dir in "${required_dirs[@]}"; do
           if [ -d "$dir" ]; then
-            echo "✅ $dir/ directory exists"
+            if [ "{{.SILENT_MODE}}" != "true" ]; then
+              echo "$dir/ directory exists"
+            fi
           else
             echo "❌ $dir/ directory missing"
             exit 1
           fi
         done
-      - echo "🎉 Directory structure validation passed!"
+      - if [ "{{.SILENT_MODE}}" != "true" ]; then echo "🎉 Directory structure validation passed!"; fi
 
   version:
     desc: Show IDP Builder version and configuration
+    silent: true
+    vars:
+      SILENT_MODE: '{{.SILENT_MODE}}'
     cmds:
       - |
-        echo "IDP Builder v1.0.0"
-        echo "Platform: {{.PROVIDER}}"
-        echo "Environment: {{.ENVIRONMENT}}"
-        echo "Cluster: {{.CLUSTER_NAME}}"
-        echo "Region: {{.REGION}}"
+        if [ "{{.SILENT_MODE}}" != "true" ]; then
+          echo "IDP Builder v1.0.0"
+          echo "Platform: {{.PROVIDER}}"
+          echo "Environment: {{.ENVIRONMENT}}"
+          echo "Cluster: {{.CLUSTER_NAME}}"
+          echo "Region: {{.REGION}}"
+          echo "Silent Mode: {{.SILENT_MODE}}"
+        fi
 
   # Internal Helper Tasks
   _show-help:
     desc: Show comprehensive help information
     silent: true
+    vars:
+      SILENT_MODE: '{{.SILENT_MODE}}'
     cmds:
       - |
-        cat << 'EOF'
+        if [ "{{.SILENT_MODE}}" != "true" ]; then
+          cat << 'EOF'
         ╭─────────────────────────────────────────────────────────────────────────────────╮
         │                    IDP Builder - Platform Setup & Management                    │
         ╰─────────────────────────────────────────────────────────────────────────────────╯
         
-        🏗️ CORE INFRASTRUCTURE:
+        CORE INFRASTRUCTURE:
           task check-prerequisites     - Check all prerequisites for platform setup
           task setup-environment       - Setup and validate environment configuration
           task configure-provider      - Configure cloud provider settings
           
-        ☸️ CLUSTER MANAGEMENT:
+        CLUSTER MANAGEMENT:
           task create-cluster          - Create Kubernetes cluster
           task cluster:delete-cluster  - Delete Kubernetes cluster
           task cluster:list-clusters   - List all clusters
           task cluster:cluster-status  - Show current cluster status
           
-        🌐 INFRASTRUCTURE SETUP:
+        INFRASTRUCTURE SETUP:
           task setup-networking        - Setup ingress and networking
           task setup-storage           - Setup storage classes and volumes
           
-        🚀 PLATFORM COMPONENTS:
+        PLATFORM COMPONENTS:
           task install-gitops          - Install ArgoCD GitOps platform
           task install-crossplane      - Install Crossplane Infrastructure as Code
-          task install-backstage       - Install Backstage Developer Portal
+          task install-backstage       - Install Backstage Developer Portal (placeholder)
+          task install-backstage-production IMAGE=your-image:tag - Install Backstage directly with production image
+          task upgrade-backstage-production IMAGE=your-image:tag - Upgrade placeholder to production image
           task install-all-platforms   - Install all platform components
           
-        🚀 QUICK WORKFLOWS:
+        🔨 APPLICATION DEVELOPMENT:
+          task create-backstage-app APP_NAME=my-app [GITHUB_TOKEN=xxx] - Create new Backstage app with IDP plugins
+          task build-and-deploy-backstage APP_NAME=my-app [IMAGE_TAG=v1.0.0] - Build and deploy via ArgoCD
+          
+        QUICK WORKFLOWS:
           task quick-setup             - Complete infrastructure setup for development
           task help                    - Show this help
           task validate-structure      - Validate directory structure
@@ -319,14 +475,18 @@ tasks:
           task cluster:help            - Cluster management tasks
           task networking:help         - Networking and ingress tasks
           task storage:help            - Storage management tasks
+          task gitops:help             - ArgoCD GitOps platform tasks
+          task crossplane:help         - Crossplane Infrastructure as Code tasks
+          task backstage:help          - Backstage Developer Portal tasks
           
-        📋 CURRENT CONFIGURATION:
+        CURRENT CONFIGURATION:
           Provider: {{.PROVIDER}}
           Environment: {{.ENVIRONMENT}}
           Cluster: {{.CLUSTER_NAME}}
           Region: {{.REGION}}
+          Silent Mode: {{.SILENT_MODE}}
           
-        💡 USAGE EXAMPLES:
+        USAGE EXAMPLES:
           task quick-setup PROVIDER=kind CLUSTER_NAME=dev-cluster
           task create-cluster CLUSTER_NAME=prod-cluster PROVIDER=aws REGION=ap-southeast-2
           task install-gitops CLUSTER_NAME=my-cluster NAMESPACE=argocd
@@ -334,13 +494,20 @@ tasks:
           task install-backstage DOMAIN=backstage.example.com
           task install-all-platforms CLUSTER_NAME=complete-stack
           
-        🔧 Phase 3 Status: Platform Layer Migration ✅
+          # Complete Backstage application workflow:
+          task create-backstage-app APP_NAME=my-portal GITHUB_TOKEN=$GITHUB_TOKEN
+          task build-and-deploy-backstage APP_NAME=my-portal IMAGE_TAG=v1.0.0
+          
+        SILENT MODE USAGE:
+          task -s quick-setup                              # Use CLI flag for silent mode
+          task --silent check-prerequisites                # Alternative CLI flag syntax
+          task -s install-all-platforms                    # Silent platform installation
+          
+          Note: Use CLI flags (-s or --silent) for silent mode rather than SILENT_MODE variable
+          
+        Phase 3 Status: Platform Layer Migration - COMPLETE
         
         Available providers: kind, aws, gcp, azure
         Available environments: dev, staging, production
-        
-        Next phases will add:
-        - Application lifecycle management and workflows (Phase 4)
-        - Advanced configurations and integrations (Phase 5) 
-        - Complete documentation and production examples (Phase 6)
         EOF
+        fi

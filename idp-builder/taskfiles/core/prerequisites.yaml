@@ -9,8 +9,69 @@ vars:
   CLUSTER_NAME: '{{.CLUSTER_NAME | default "idp-cluster"}}'
   PROVIDER: '{{.PROVIDER | default "kind"}}'
   ENVIRONMENT: '{{.ENVIRONMENT | default "dev"}}'
+  
+  # Silent Mode Control
+  SILENT_MODE: '{{.SILENT_MODE | default "false"}}'
 
 tasks:
+
+  # ===============================
+  # Help and Information
+  # ===============================
+
+  help:
+    desc: Show prerequisites management help and available tasks
+    silent: true
+    cmds:
+      - |
+        cat << 'EOF'
+        Prerequisites Management
+        ==========================
+        
+        Available Commands:
+        ------------------
+        check-prerequisites    - Check all prerequisites for IDP Builder (alias: check-all)
+        install-prerequisites  - Install all prerequisite tools (alias: install-all)
+        check-minimal         - Check minimal prerequisites for quick-start (kubectl, docker, kind)
+        check-system-requirements - Check basic system requirements
+        check-kubernetes-tools - Check Kubernetes-related tools
+        check-container-tools - Check container-related tools (Docker, containerd)
+        check-common-tools    - Check common development tools
+        check-provider-tools  - Check cloud provider CLI tools based on PROVIDER
+        check-authentication - Check authentication for specified provider
+        install-missing-tools - Install commonly missing tools (basic implementation)
+        
+        Usage Examples:
+        --------------
+        task prerequisites:help
+        task prerequisites:check-prerequisites
+        task prerequisites:check-minimal
+        task prerequisites:install-prerequisites
+        task prerequisites:check-provider-tools PROVIDER=aws
+        task prerequisites:check-authentication PROVIDER=gcp
+        
+        Supported Providers:
+        -------------------
+        kind    - Local Kubernetes (Kind)
+        aws     - Amazon Web Services
+        gcp     - Google Cloud Platform
+        azure   - Microsoft Azure
+        
+        Environment Variables:
+        ---------------------
+        PROVIDER            - Cloud provider (default: kind)
+        ENVIRONMENT         - Environment type (default: dev)
+        CLUSTER_NAME        - Cluster name (default: idp-cluster)
+        SKIP_DOCKER         - Skip Docker checks (default: false)
+        SKIP_KUBECTL        - Skip kubectl checks (default: false)
+        INSTALL_TOOLS       - Enable tool installation (default: true)
+        
+        Quick Start:
+        -----------
+        1. task prerequisites:check-minimal     # Check basic requirements
+        2. task prerequisites:check-all         # Full prerequisite check
+        3. task prerequisites:install-all       # Install missing tools
+        EOF
 
   # ===============================
   # Main Prerequisite Checks
@@ -19,11 +80,16 @@ tasks:
   check-prerequisites:
     desc: Check all prerequisites for IDP Builder (alias for check-all)
     aliases: [check-all]
+    silent: true
     vars:
-      SKIP_DOCKER: '{{.SKIP_DOCKER | default "false"}}'
-      SKIP_KUBECTL: '{{.SKIP_KUBECTL | default "false"}}'
+      PROVIDER: '{{.PROVIDER}}'
+      ENVIRONMENT: '{{.ENVIRONMENT}}'
+      SILENT_MODE: '{{.SILENT_MODE}}'
     cmds:
-      - echo "🔍 Checking prerequisites for PROVIDER={{.PROVIDER}} ENVIRONMENT={{.ENVIRONMENT}}"
+      - |
+        if [ "{{.SILENT_MODE}}" != "true" ]; then
+          echo "Checking prerequisites for PROVIDER={{.PROVIDER}} ENVIRONMENT={{.ENVIRONMENT}}"
+        fi
       - task: check-system-requirements
       - task: check-kubernetes-tools
       - task: check-container-tools  
@@ -34,28 +100,42 @@ tasks:
       - task: check-authentication
         vars:
           PROVIDER: '{{.PROVIDER}}'
-      - echo "✅ All prerequisites check complete for {{.PROVIDER}} provider"
+      - |
+        if [ "{{.SILENT_MODE}}" != "true" ]; then
+          echo "All prerequisites check complete for {{.PROVIDER}} provider"
+        fi
 
   install-prerequisites:
     desc: Install all prerequisite tools (alias for install-all) 
     aliases: [install-all]
+    silent: true
     vars:
       INSTALL_TOOLS: '{{.INSTALL_TOOLS | default "true"}}'
       SKIP_DOCKER: '{{.SKIP_DOCKER | default "false"}}'
       SKIP_KUBECTL: '{{.SKIP_KUBECTL | default "false"}}'
     cmds:
-      - echo "🔧 Installing prerequisites for PROVIDER={{.PROVIDER}}..."
+      - |
+        if [ "{{.SILENT_MODE}}" != "true" ]; then
+          echo "Installing prerequisites for PROVIDER={{.PROVIDER}}..."
+        fi
       - task: check-system-requirements
       - task: install-missing-tools
         vars:
           INSTALL_TOOLS: '{{.INSTALL_TOOLS}}'
           PROVIDER: '{{.PROVIDER}}'
-      - echo "✅ Prerequisite installation complete"
+      - |
+        if [ "{{.SILENT_MODE}}" != "true" ]; then
+          echo "Prerequisite installation complete"
+        fi
 
   check-minimal:
     desc: Check minimal prerequisites for quick-start (kubectl, docker, kind)
+    silent: true
     cmds:
-      - echo "🔍 Checking minimal prerequisites..."
+      - |
+        if [ "{{.SILENT_MODE}}" != "true" ]; then
+          echo "Checking minimal prerequisites..."
+        fi
       - task: _check-tool
         vars:
           TOOL: kubectl
@@ -71,9 +151,12 @@ tasks:
           TOOL: kind
           DESC: "Kubernetes in Docker"
           INSTALL: "https://kind.sigs.k8s.io/docs/user/quick-start/#installation"
-      - echo ""
-      - echo "✅ Minimal prerequisites check complete!"
-      - echo "Ready for quick-start setup with kind provider."
+      - |
+        if [ "{{.SILENT_MODE}}" != "true" ]; then
+          echo ""
+          echo "Minimal prerequisites check complete!"
+          echo "Ready for quick-start setup with kind provider."
+        fi
 
   # ===============================
   # System Requirements
@@ -81,14 +164,20 @@ tasks:
 
   check-system-requirements:
     desc: Check basic system requirements
+    silent: true
     cmds:
-      - echo "🖥️ Checking system requirements..."
+      - |
+        if [ "{{.SILENT_MODE}}" != "true" ]; then
+          echo "🖥️ Checking system requirements..."
+        fi
       - |
         # Check OS
         if command -v uname >/dev/null 2>&1; then
           OS=$(uname -s)
           ARCH=$(uname -m)
-          echo "✅ Operating System: $OS ($ARCH)"
+          if [ "{{.SILENT_MODE}}" != "true" ]; then
+            echo "Operating System: $OS ($ARCH)"
+          fi
         else
           echo "❌ Cannot determine operating system"
           exit 1
@@ -97,19 +186,25 @@ tasks:
         # Check memory (minimum 4GB recommended)
         if command -v free >/dev/null 2>&1; then
           MEMORY_GB=$(free -g | awk 'NR==2{printf "%.1f", $2}')
-          echo "✅ Memory: ${MEMORY_GB}GB available"
-          if [ "$(echo "$MEMORY_GB < 4" | bc -l)" -eq 1 ]; then
-            echo "⚠️ Warning: Less than 4GB memory available. Consider upgrading for better performance."
+          if [ "{{.SILENT_MODE}}" != "true" ]; then
+            echo "Memory: ${MEMORY_GB}GB available"
+            if [ "$(echo "$MEMORY_GB < 4" | bc -l)" -eq 1 ]; then
+              echo "⚠️ Warning: Less than 4GB memory available. Consider upgrading for better performance."
+            fi
           fi
         else
-          echo "ℹ️ Memory check not available on this system"
+          if [ "{{.SILENT_MODE}}" != "true" ]; then
+            echo "Memory check not available on this system"
+          fi
         fi
       - |
         # Check disk space (minimum 10GB recommended)
         DISK_GB=$(df -BG . | awk 'NR==2 {print $4}' | sed 's/G//')
-        echo "✅ Disk space: ${DISK_GB}GB available"
-        if [ "$DISK_GB" -lt 10 ]; then
-          echo "⚠️ Warning: Less than 10GB disk space available"
+        if [ "{{.SILENT_MODE}}" != "true" ]; then
+          echo "Disk space: ${DISK_GB}GB available"
+          if [ "$DISK_GB" -lt 10 ]; then
+            echo "⚠️ Warning: Less than 10GB disk space available"
+          fi
         fi
 
   # ===============================
@@ -118,8 +213,12 @@ tasks:
 
   check-kubernetes-tools:
     desc: Check Kubernetes-related tools
+    silent: true
     cmds:
-      - echo "☸️ Checking Kubernetes tools..."
+      - |
+        if [ "{{.SILENT_MODE}}" != "true" ]; then
+          echo "Checking Kubernetes tools..."
+        fi
       - task: _check-tool
         vars:
           TOOL: kubectl
@@ -142,10 +241,11 @@ tasks:
 
   check-container-tools:
     desc: Check container-related tools
+    silent: true
     vars:
       SKIP_DOCKER: '{{.SKIP_DOCKER | default "false"}}'
     cmds:
-      - echo "🐳 Checking container tools..."
+      - echo "Checking container tools..."
       - task: _check-tool
         vars:
           TOOL: docker
@@ -158,8 +258,9 @@ tasks:
 
   check-common-tools:
     desc: Check common development tools
+    silent: true
     cmds:
-      - echo "🛠️ Checking common tools..."
+      - echo "Checking common tools..."
       - task: _check-tool
         vars:
           TOOL: git
@@ -187,10 +288,11 @@ tasks:
 
   check-provider-tools:
     desc: Check cloud provider CLI tools based on PROVIDER
+    silent: true
     vars:
       PROVIDER: '{{.PROVIDER}}'
     cmds:
-      - echo "☁️ Checking tools for provider {{.PROVIDER}}"
+      - echo "Checking tools for provider {{.PROVIDER}}"
       - |
         case "{{.PROVIDER}}" in
           aws)
@@ -204,7 +306,7 @@ tasks:
             task _check-tool TOOL=az DESC="Azure CLI" INSTALL="https://docs.microsoft.com/en-us/cli/azure/install-azure-cli"
             ;;
           kind)
-            echo "✅ Kind provider - no additional tools required"
+            echo "Kind provider - no additional tools required"
             ;;
           *)
             echo "⚠️ Unknown provider {{.PROVIDER}}"
@@ -217,16 +319,17 @@ tasks:
 
   check-authentication:
     desc: Check authentication for specified provider
+    silent: true
     vars:
       PROVIDER: '{{.PROVIDER}}'
     cmds:
-      - echo "🔐 Checking authentication for provider {{.PROVIDER}}"
+      - echo "Checking authentication for provider {{.PROVIDER}}"
       - |
         case "{{.PROVIDER}}" in
           aws)
             if command -v aws >/dev/null 2>&1; then
               if aws sts get-caller-identity >/dev/null 2>&1; then
-                echo "✅ AWS authentication working"
+                echo "AWS authentication working"
                 aws sts get-caller-identity --output table
               else
                 echo "❌ AWS authentication failed - run 'aws configure' or set credentials"
@@ -240,7 +343,7 @@ tasks:
             if command -v gcloud >/dev/null 2>&1; then
               if gcloud auth list --filter=status:ACTIVE --format="value(account)" | head -n1 >/dev/null 2>&1; then
                 ACCOUNT=$(gcloud auth list --filter=status:ACTIVE --format="value(account)" | head -n1)
-                echo "✅ GCP authentication working for: $ACCOUNT"
+                echo "GCP authentication working for: $ACCOUNT"
                 gcloud config get-value project 2>/dev/null || echo "⚠️ No default project set"
               else
                 echo "❌ GCP authentication failed - run 'gcloud auth login'"
@@ -253,7 +356,7 @@ tasks:
           azure)
             if command -v az >/dev/null 2>&1; then
               if az account show >/dev/null 2>&1; then
-                echo "✅ Azure authentication working"
+                echo "Azure authentication working"
                 az account show --output table
               else
                 echo "❌ Azure authentication failed - run 'az login'"
@@ -264,7 +367,7 @@ tasks:
             fi
             ;;
           kind)
-            echo "✅ Kind provider - no authentication required"
+            echo "Kind provider - no authentication required"
             ;;
           *)
             echo "⚠️ Unknown provider {{.PROVIDER}}"
@@ -277,28 +380,29 @@ tasks:
 
   install-missing-tools:
     desc: Install commonly missing tools (basic implementation)
+    silent: true
     vars:
       INSTALL_TOOLS: '{{.INSTALL_TOOLS | default "true"}}'
       PROVIDER: '{{.PROVIDER | default "kind"}}'
     cmds:
       - |
         if [ "{{.INSTALL_TOOLS}}" = "false" ]; then
-          echo "⏭️ Skipping tool installation (INSTALL_TOOLS=false)"
+          echo "Skipping tool installation (INSTALL_TOOLS=false)"
           exit 0
         fi
         
-        echo "🔧 Attempting to install missing tools..."
+        echo "Attempting to install missing tools..."
         echo "Note: This is a basic implementation. Manual installation may be required."
         
         # Try to install common tools via package manager
         if command -v apt-get >/dev/null 2>&1; then
-          echo "📦 Debian/Ubuntu detected - using apt-get"
+          echo "Debian/Ubuntu detected - using apt-get"
           sudo apt-get update && sudo apt-get install -y curl git jq
         elif command -v yum >/dev/null 2>&1; then
-          echo "📦 RHEL/CentOS detected - using yum"
+          echo "RHEL/CentOS detected - using yum"
           sudo yum install -y curl git jq
         elif command -v brew >/dev/null 2>&1; then
-          echo "📦 macOS detected - using brew"
+          echo "macOS detected - using brew"
           brew install curl git jq yq
         else
           echo "❌ No supported package manager found"
@@ -312,6 +416,7 @@ tasks:
 
   _check-tool:
     internal: true
+    silent: true
     vars:
       TOOL: '{{.TOOL}}'
       DESC: '{{.DESC}}'
@@ -320,7 +425,7 @@ tasks:
       - |
         if command -v {{.TOOL}} >/dev/null 2>&1; then
           VERSION=$({{.TOOL}} --version 2>/dev/null | head -n1 | cut -d' ' -f1-3 || echo "version unknown")
-          echo "✅ {{.DESC}} ({{.TOOL}}): $VERSION"
+          echo "{{.DESC}} ({{.TOOL}}): $VERSION"
         else
           echo "❌ {{.DESC}} ({{.TOOL}}) Not found"
           echo "   Install from {{.INSTALL}}"
@@ -329,6 +434,7 @@ tasks:
 
   _check-optional-tool:
     internal: true
+    silent: true
     vars:
       TOOL: '{{.TOOL}}'
       DESC: '{{.DESC}}'
@@ -337,7 +443,7 @@ tasks:
       - |
         if command -v {{.TOOL}} >/dev/null 2>&1; then
           VERSION=$({{.TOOL}} --version 2>/dev/null | head -n1 | cut -d' ' -f1-3 || echo "version unknown")
-          echo "✅ {{.DESC}} ({{.TOOL}}): $VERSION"
+          echo "{{.DESC}} ({{.TOOL}}): $VERSION"
         else
           echo "⚠️ {{.DESC}} ({{.TOOL}}) Not found (optional)"
           echo "   Install from {{.INSTALL}}"

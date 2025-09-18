@@ -12,10 +12,11 @@ includes:
 tasks:
   help:
     desc: Show application workflow help and examples
+    silent: true
     cmds:
       - |
         cat << 'EOF'
-        🚀 IDP Usage - Application Development Workflows
+        IDP Usage - Application Development Workflows
         ================================================
         
         DEVELOPER ONBOARDING WORKFLOWS:
@@ -59,12 +60,13 @@ tasks:
           # Setup complete CI/CD pipeline
           task workflows:setup-ci-cd APP_NAME=web-app PIPELINE_TYPE=github
         
-        📋 Use 'task workflows:WORKFLOW_NAME:help' for detailed workflow help
+        Use 'task workflows:WORKFLOW_NAME:help' for detailed workflow help
         EOF
 
   # Quick access to main workflows
   developer-onboarding:
     desc: Complete developer onboarding workflow
+    silent: true
     cmds:
       - task: onboarding:developer-onboarding
         vars:
@@ -74,6 +76,7 @@ tasks:
 
   microservices-demo:
     desc: Full microservices demonstration
+    silent: true
     cmds:
       - task: demo:microservices-demo
         vars:
@@ -82,6 +85,7 @@ tasks:
 
   production-deploy:
     desc: Deploy to production with safety checks
+    silent: true
     cmds:
       - task: production:production-deploy
         vars:
@@ -92,6 +96,7 @@ tasks:
 
   setup-ci-cd:
     desc: Setup complete CI/CD pipeline
+    silent: true
     cmds:
       - task: cicd:setup-ci-cd
         vars:

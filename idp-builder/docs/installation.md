@@ -336,6 +336,8 @@ task backstage:access-ui
 # Open: http://localhost:3000
 ```
 
+> **⚠️ Production Note**: The initial Backstage installation uses a placeholder nginx service with a branded landing page. For production use, you must replace this with a custom Backstage Docker image. See [Production Deployment](#production-deployment) below.
+
 #### Kubernetes Dashboard (if installed)
 ```bash
 kubectl proxy
@@ -402,5 +404,146 @@ After successful installation:
 2. **Setup monitoring**: Configure observability and alerting
 3. **Create backups**: Setup automated backup procedures
 4. **Team onboarding**: Onboard development teams to the platform
+
+## Production Deployment
+
+### Replacing the Backstage Placeholder
+
+The `task install-backstage` command installs a branded placeholder service using `nginx:alpine` for initial setup and validation. **Before moving to production**, you must replace this with a custom Backstage Docker image.
+
+#### Option 1: Quick Custom Backstage Image
+
+Create a minimal Backstage application:
+
+```bash
+# 1. Create a new Backstage app
+npx @backstage/create-app@latest
+
+# 2. Navigate to your app directory
+cd my-backstage-app
+
+# 3. Build production Docker image
+docker build . -t my-backstage:latest
+
+# 4. Update the deployment
+kubectl set image deployment/backstage backstage=my-backstage:latest -n backstage
+
+# 5. Restart the deployment
+kubectl rollout restart deployment/backstage -n backstage
+```
+
+#### Option 2: Production-Ready Custom Image (Recommended)
+
+For production use, create a comprehensive Backstage application with plugins:
+
+```bash
+# 1. Use the advanced example
+cd examples/advanced/production-backstage
+
+# 2. Configure environment
+cp .env.example .env
+# Edit .env with your configuration
+
+# 3. Build custom Backstage with plugins
+task backstage:build-custom-image
+
+# 4. Deploy to production
+task backstage:deploy-production
+
+# 5. Verify deployment
+task backstage:health-check
+```
+
+#### Option 3: Quick Upgrade with Built-in Task (Easiest)
+
+Use the provided upgrade task to switch from placeholder to production:
+
+```bash
+# 1. Build your custom Backstage image first
+docker build -t my-backstage:v1.0.0 ./my-backstage-app
+
+# 2. Upgrade the existing deployment
+task upgrade-backstage-production BACKSTAGE_IMAGE=my-backstage:v1.0.0
+
+# 3. Verify the upgrade
+task backstage:health-check
+
+# Alternative: Use official Backstage image (basic setup)
+task upgrade-backstage-production BACKSTAGE_IMAGE=backstage/backstage:latest
+```
+
+#### Option 4: Update Existing Taskfile
+
+To permanently change the image in the taskfile:
+
+1. **Edit the backstage.yaml taskfile**:
+   ```bash
+   vim taskfiles/platform/backstage.yaml
+   ```
+
+2. **Find the deployment section** in `_install-backstage-core` task and replace:
+   ```yaml
+   # Change this line:
+   image: nginx:alpine
+   
+   # To your custom image:
+   image: your-registry/backstage:v1.0.0
+   ```
+
+3. **Update port configuration** if needed:
+   ```yaml
+   # Change container port from 80 to 7007 for real Backstage
+   ports:
+   - containerPort: 7007  # Backstage default port
+   
+   # Update service targetPort accordingly
+   ports:
+   - port: 80
+     targetPort: 7007  # Route to Backstage port
+   ```
+
+### Backstage Configuration
+
+The installation creates a comprehensive `backstage-config` ConfigMap with:
+
+- **Database connection**: Pre-configured PostgreSQL
+- **Authentication**: Ready for GitHub integration  
+- **Catalog**: Component discovery and management
+- **Scaffolder**: Software templates support
+- **TechDocs**: Documentation integration
+
+To customize the configuration:
+
+```bash
+# Edit the configuration
+kubectl edit configmap backstage-config -n backstage
+
+# Or update via taskfile
+task backstage:update-config CONFIG_FILE=./my-backstage-config.yaml
+
+# Restart to apply changes
+kubectl rollout restart deployment/backstage -n backstage
+```
+
+### Production Checklist
+
+Before production deployment, ensure:
+
+- [ ] **Custom Backstage image** with required plugins
+- [ ] **Database persistence** (replace emptyDir with PVC)
+- [ ] **External database** (managed PostgreSQL/MySQL)
+- [ ] **SSL/TLS certificates** for ingress
+- [ ] **Authentication provider** (GitHub, OIDC, etc.)
+- [ ] **Monitoring and logging** integration
+- [ ] **Backup procedures** for database and configuration
+- [ ] **Resource limits** and requests configured
+- [ ] **Multi-replica setup** for high availability
+
+### Examples and Resources
+
+- **Production Example**: `examples/advanced/production-backstage/`
+- **Custom Plugins**: `examples/advanced/production-backstage/plugins/`
+- **Helm Charts**: `charts/backstage/` for advanced deployment
+- **Official Docs**: [Backstage.io Documentation](https://backstage.io/docs/)
 
 See the [Architecture Guide](architecture.md) for understanding the platform design and [API Reference](api-reference.md) for detailed task documentation.

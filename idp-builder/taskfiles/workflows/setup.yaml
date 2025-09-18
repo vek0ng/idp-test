@@ -7,7 +7,7 @@ vars:
   CLUSTER_NAME: '{{.CLUSTER_NAME | default "idp-cluster"}}'
   PROVIDER: '{{.PROVIDER | default "kind"}}'
   ENVIRONMENT: '{{.ENVIRONMENT | default "dev"}}'
-  REGION: '{{.REGION | default "us-west-2"}}'
+  REGION: '{{.REGION | default "ap-southeast-1"}}'
   NAMESPACE: '{{.NAMESPACE | default "default"}}'
 
 tasks:
@@ -19,7 +19,7 @@ tasks:
       ENVIRONMENT: '{{.ENVIRONMENT}}'
       REGION: '{{.REGION}}'
     cmds:
-      - echo "🚀 Starting Complete IDP Platform Setup"
+      - echo "Starting Complete IDP Platform Setup"
       - echo "======================================"
       - echo "Cluster - {{.CLUSTER_NAME}}"
       - echo "Provider - {{.PROVIDER}}"
@@ -48,17 +48,17 @@ tasks:
         vars:
           CLUSTER_NAME: '{{.CLUSTER_NAME}}'
       - echo ""
-      - echo "✅ Complete IDP Platform Setup Finished!"
+      - echo "Complete IDP Platform Setup Finished!"
       - echo "Platform is ready for application development"
 
   setup-prerequisites:
     desc: Setup and validate all prerequisites for IDP platform
     cmds:
-      - echo "🔍 Validating Prerequisites"
+      - echo "Validating Prerequisites"
       - echo "=========================="
-      - task: core:check-prerequisites
-      - task: core:validate-environment
-      - echo "✅ Prerequisites validated successfully"
+      - task: :prerequisites:check-all
+      - task: :environment:validate
+      - echo "Prerequisites validated successfully"
 
   setup-infrastructure:
     desc: Setup infrastructure layer (cluster, networking, storage)
@@ -67,7 +67,7 @@ tasks:
       PROVIDER: '{{.PROVIDER}}'
       REGION: '{{.REGION}}'
     cmds:
-      - echo "🏗️ Setting up Infrastructure Layer"
+      - echo "Setting up Infrastructure Layer"
       - echo "================================="
       - echo "Creating cluster - {{.CLUSTER_NAME}} on {{.PROVIDER}}"
       - task: infrastructure:create-cluster
@@ -85,7 +85,7 @@ tasks:
         vars:
           CLUSTER_NAME: '{{.CLUSTER_NAME}}'
           PROVIDER: '{{.PROVIDER}}'
-      - echo "✅ Infrastructure setup complete"
+      - echo "Infrastructure setup complete"
 
   setup-platform-stack:
     desc: Install complete platform stack (ArgoCD, Crossplane, Backstage)
@@ -94,7 +94,7 @@ tasks:
       PROVIDER: '{{.PROVIDER}}'
       ENVIRONMENT: '{{.ENVIRONMENT}}'
     cmds:
-      - echo "🚀 Installing Platform Stack"
+      - echo "Installing Platform Stack"
       - echo "============================"
       - echo "Installing ArgoCD GitOps Platform..."
       - task: gitops:install
@@ -115,7 +115,7 @@ tasks:
           PROVIDER: '{{.PROVIDER}}'
           ENVIRONMENT: '{{.ENVIRONMENT}}'
       - echo ""
-      - echo "✅ Platform stack installation complete"
+      - echo "Platform stack installation complete"
 
   setup-development:
     desc: Setup development-optimized IDP platform
@@ -135,7 +135,7 @@ tasks:
       - task: configure-dev-settings
         vars:
           CLUSTER_NAME: '{{.CLUSTER_NAME}}'
-      - echo "✅ Development platform ready!"
+      - echo "Development platform ready!"
 
   setup-production:
     desc: Setup production-ready IDP platform with safety checks
@@ -163,14 +163,14 @@ tasks:
         vars:
           CLUSTER_NAME: '{{.CLUSTER_NAME}}'
           PROVIDER: '{{.PROVIDER}}'
-      - echo "✅ Production platform setup complete"
+      - echo "Production platform setup complete"
 
   configure-dev-settings:
     desc: Apply development-specific configurations
     vars:
       CLUSTER_NAME: '{{.CLUSTER_NAME}}'
     cmds:
-      - echo "⚙️ Applying development configurations"
+      - echo "Applying development configurations"
       - |
         # Enable debug logging
         kubectl patch configmap argocd-cmd-params-cm -n argocd \
@@ -179,7 +179,7 @@ tasks:
         # Configure Backstage for development
         kubectl patch configmap backstage-config -n backstage \
           --patch '{"data":{"app-config.yaml":"# Development settings applied"}}'
-      - echo "✅ Development settings applied"
+      - echo "Development settings applied"
 
   configure-production-settings:
     desc: Apply production hardening and security settings
@@ -197,14 +197,14 @@ tasks:
         kubectl create secret generic backstage-secrets -n backstage \
           --from-literal=POSTGRES_PASSWORD="$(openssl rand -base64 32)" \
           --dry-run=client -o yaml | kubectl apply -f -
-      - echo "✅ Production security applied"
+      - echo "Production security applied"
 
   validate-complete-setup:
     desc: Comprehensive validation of complete IDP setup
     vars:
       CLUSTER_NAME: '{{.CLUSTER_NAME}}'
     cmds:
-      - echo "🔬 Validating Complete IDP Setup"
+      - echo "Validating Complete IDP Setup"
       - echo "==============================="
       - echo "Validating infrastructure..."
       - task: infrastructure:health-check
@@ -220,14 +220,14 @@ tasks:
       - task: validate-connectivity
         vars:
           CLUSTER_NAME: '{{.CLUSTER_NAME}}'
-      - echo "✅ Complete setup validation passed"
+      - echo "Complete setup validation passed"
 
   validate-platform-health:
     desc: Validate health of all platform components
     vars:
       CLUSTER_NAME: '{{.CLUSTER_NAME}}'
     cmds:
-      - echo "🏥 Platform Health Check"
+      - echo "Platform Health Check"
       - echo "======================="
       - task: gitops:health-check
         vars:
@@ -238,27 +238,27 @@ tasks:
       - task: backstage:health-check
         vars:
           CLUSTER_NAME: '{{.CLUSTER_NAME}}'
-      - echo "✅ All platform components healthy"
+      - echo "All platform components healthy"
 
   validate-connectivity:
     desc: Validate connectivity between platform components
     vars:
       CLUSTER_NAME: '{{.CLUSTER_NAME}}'
     cmds:
-      - echo "🔗 Connectivity Validation"
+      - echo "Connectivity Validation"
       - echo "========================="
       - |
         # Test ArgoCD accessibility
         kubectl get ingress -n argocd -o jsonpath='{.items[0].status.loadBalancer.ingress[0].ip}' > /dev/null
-        echo "✅ ArgoCD ingress accessible"
+        echo "ArgoCD ingress accessible"
       - |
         # Test Backstage accessibility
         kubectl get service backstage -n backstage -o jsonpath='{.status.loadBalancer.ingress[0].ip}' > /dev/null || echo "⚠️ Backstage service check (expected in kind)"
-        echo "✅ Backstage service accessible"
+        echo "Backstage service accessible"
       - |
         # Test Crossplane providers
-        kubectl get providers.pkg.crossplane.io | grep -q "HEALTHY" && echo "✅ Crossplane providers healthy" || echo "⚠️ Crossplane providers initializing"
-      - echo "✅ Connectivity validation complete"
+        kubectl get providers.pkg.crossplane.io | grep -q "HEALTHY" && echo "Crossplane providers healthy" || echo "⚠️ Crossplane providers initializing"
+      - echo "Connectivity validation complete"
 
   teardown-complete:
     desc: Complete teardown of IDP platform (DESTRUCTIVE)
@@ -282,14 +282,14 @@ tasks:
         vars:
           CLUSTER_NAME: '{{.CLUSTER_NAME}}'
           PROVIDER: '{{.PROVIDER}}'
-      - echo "💥 Complete teardown finished"
+      - echo "Complete teardown finished"
 
   teardown-platform:
     desc: Uninstall all platform components
     vars:
       CLUSTER_NAME: '{{.CLUSTER_NAME}}'
     cmds:
-      - echo "🗑️ Uninstalling Platform Components"
+      - echo "Uninstalling Platform Components"
       - echo "=================================="
       - task: backstage:uninstall
         vars:
@@ -300,14 +300,14 @@ tasks:
       - task: gitops:uninstall
         vars:
           CLUSTER_NAME: '{{.CLUSTER_NAME}}'
-      - echo "✅ Platform components uninstalled"
+      - echo "Platform components uninstalled"
 
   help:
     desc: Show workflow setup help and examples
     cmds:
       - |
         cat << 'EOF'
-        🚀 IDP Builder - Platform Setup Workflows
+        IDP Builder - Platform Setup Workflows
         ==========================================
         
         COMPLETE SETUP WORKFLOWS:

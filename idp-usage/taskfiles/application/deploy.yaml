@@ -30,7 +30,7 @@ tasks:
       NAMESPACE: '{{.NAMESPACE}}'
       IMAGE_TAG: '{{.IMAGE_TAG}}'
     cmds:
-      - echo "🚀 Deploying {{.APP_NAME}} to {{.ENVIRONMENT}} environment"
+      - echo "Deploying {{.APP_NAME}} to {{.ENVIRONMENT}} environment"
       - task: _validate-deployment-requirements
         vars:
           APP_NAME: '{{.APP_NAME}}'
@@ -48,7 +48,7 @@ tasks:
         vars:
           APP_NAME: '{{.APP_NAME}}'
           NAMESPACE: '{{.NAMESPACE}}'
-      - echo "✅ Deployment complete {{.APP_NAME}} in {{.NAMESPACE}}"
+      - echo "Deployment complete {{.APP_NAME}} in {{.NAMESPACE}}"
 
   undeploy:
     desc: Remove application deployment from Kubernetes
@@ -56,13 +56,13 @@ tasks:
       APP_NAME: '{{.APP_NAME}}'
       NAMESPACE: '{{.NAMESPACE}}'
     cmds:
-      - echo "🗑️ Undeploying {{.APP_NAME}} from {{.NAMESPACE}}"
+      - echo "Undeploying {{.APP_NAME}} from {{.NAMESPACE}}"
       - task: _confirm-undeploy
         vars:
           APP_NAME: '{{.APP_NAME}}'
           NAMESPACE: '{{.NAMESPACE}}'
       - kubectl delete -f apps/{{.APP_NAME}}/k8s/ -n {{.NAMESPACE}} --ignore-not-found=true
-      - echo "✅ Undeployment complete"
+      - echo "Undeployment complete"
 
   # ===============================
   # Application Scaling
@@ -78,7 +78,7 @@ tasks:
       - echo "📏 Scaling {{.APP_NAME}} to {{.REPLICAS}} replicas"
       - kubectl scale deployment {{.APP_NAME}} --replicas={{.REPLICAS}} -n {{.NAMESPACE}}
       - kubectl rollout status deployment/{{.APP_NAME}} -n {{.NAMESPACE}} --timeout={{.DEPLOYMENT_TIMEOUT}}
-      - echo "✅ Scaling complete"
+      - echo "Scaling complete"
 
   restart:
     desc: Restart application deployment (rolling restart)
@@ -86,10 +86,10 @@ tasks:
       APP_NAME: '{{.APP_NAME}}'
       NAMESPACE: '{{.NAMESPACE}}'
     cmds:
-      - echo "🔄 Restarting {{.APP_NAME}} deployment"
+      - echo "Restarting {{.APP_NAME}} deployment"
       - kubectl rollout restart deployment/{{.APP_NAME}} -n {{.NAMESPACE}}
       - kubectl rollout status deployment/{{.APP_NAME}} -n {{.NAMESPACE}} --timeout={{.DEPLOYMENT_TIMEOUT}}
-      - echo "✅ Restart complete"
+      - echo "Restart complete"
 
   # ===============================
   # Deployment Status and Health
@@ -101,19 +101,19 @@ tasks:
       APP_NAME: '{{.APP_NAME}}'
       NAMESPACE: '{{.NAMESPACE}}'
     cmds:
-      - echo "📊 Deployment Status for {{.APP_NAME}} in {{.NAMESPACE}}"
+      - echo "Deployment Status for {{.APP_NAME}} in {{.NAMESPACE}}"
       - echo "=================================================="
       - echo ""
-      - echo "🏃 Pods"
+      - echo "Pods"
       - kubectl get pods -l app={{.APP_NAME}} -n {{.NAMESPACE}} -o wide
       - echo ""
-      - echo "🚀 Deployments"
+      - echo "Deployments"
       - kubectl get deployments -l app={{.APP_NAME}} -n {{.NAMESPACE}}
       - echo ""
-      - echo "🌐 Services"
+      - echo "Services"
       - kubectl get services -l app={{.APP_NAME}} -n {{.NAMESPACE}}
       - echo ""
-      - echo "🔗 Ingress"
+      - echo "Ingress"
       - kubectl get ingress -l app={{.APP_NAME}} -n {{.NAMESPACE}} 2>/dev/null || echo "No ingress found"
 
   logs:
@@ -124,7 +124,7 @@ tasks:
       LINES: '{{.LINES | default "100"}}'
       FOLLOW: '{{.FOLLOW | default "false"}}'
     cmds:
-      - echo "📄 Logs for {{.APP_NAME}} (last {{.LINES}} lines)"
+      - echo "Logs for {{.APP_NAME}} (last {{.LINES}} lines)"
       - |
         if [ "{{.FOLLOW}}" = "true" ]; then
           kubectl logs -f deployment/{{.APP_NAME}} -n {{.NAMESPACE}} --tail={{.LINES}}
@@ -138,7 +138,7 @@ tasks:
       APP_NAME: '{{.APP_NAME}}'
       NAMESPACE: '{{.NAMESPACE}}'
     cmds:
-      - echo "🏥 Health Check for {{.APP_NAME}}"
+      - echo "Health Check for {{.APP_NAME}}"
       - echo "================================"
       - |
         # Check if deployment exists
@@ -146,7 +146,7 @@ tasks:
           READY=$(kubectl get deployment {{.APP_NAME}} -n {{.NAMESPACE}} -o jsonpath='{.status.readyReplicas}')
           DESIRED=$(kubectl get deployment {{.APP_NAME}} -n {{.NAMESPACE}} -o jsonpath='{.spec.replicas}')
           if [ "$READY" = "$DESIRED" ] && [ "$READY" != "0" ]; then
-            echo "✅ Deployment healthy ($READY/$DESIRED ready)"
+            echo "Deployment healthy ($READY/$DESIRED ready)"
           else
             echo "❌ Deployment unhealthy ($READY/$DESIRED ready)"
             exit 1
@@ -158,7 +158,7 @@ tasks:
         
         # Check service connectivity
         if kubectl get service {{.APP_NAME}}-service -n {{.NAMESPACE}} >/dev/null 2>&1; then
-          echo "✅ Service available"
+          echo "Service available"
         else
           echo "⚠️ Service not found"
         fi
@@ -218,7 +218,7 @@ tasks:
       LOCAL_PORT: '{{.LOCAL_PORT | default "8080"}}'
       TARGET_PORT: '{{.TARGET_PORT | default "8080"}}'
     cmds:
-      - echo "🔗 Port forwarding {{.APP_NAME}} to localhost {{.LOCAL_PORT}}"
+      - echo "Port forwarding {{.APP_NAME}} to localhost {{.LOCAL_PORT}}"
       - echo "Access application at http://localhost {{.LOCAL_PORT}}"
       - kubectl port-forward deployment/{{.APP_NAME}} {{.LOCAL_PORT}}:{{.TARGET_PORT}} -n {{.NAMESPACE}}
 
@@ -232,7 +232,7 @@ tasks:
       APP_NAME: '{{.APP_NAME}}'
       NAMESPACE: '{{.NAMESPACE}}'
     cmds:
-      - echo "🔍 Validating deployment requirements"
+      - echo "Validating deployment requirements"
       - |
         # Check if kubectl is available
         if ! command -v kubectl >/dev/null 2>&1; then
@@ -252,7 +252,7 @@ tasks:
           exit 1
         fi
         
-        echo "✅ Deployment requirements validated"
+        echo "Deployment requirements validated"
 
   _create-namespace:
     internal: true
@@ -262,7 +262,7 @@ tasks:
       - |
         if [ "{{.NAMESPACE}}" != "default" ]; then
           kubectl create namespace {{.NAMESPACE}} --dry-run=client -o yaml | kubectl apply -f -
-          echo "✅ Namespace {{.NAMESPACE}} ready"
+          echo "Namespace {{.NAMESPACE}} ready"
         fi
 
   _deploy-application:
@@ -288,7 +288,7 @@ tasks:
       APP_NAME: '{{.APP_NAME}}'
       NAMESPACE: '{{.NAMESPACE}}'
     cmds:
-      - echo "⏳ Waiting for deployment to be ready"
+      - echo "Waiting for deployment to be ready"
       - kubectl rollout status deployment/{{.APP_NAME}} -n {{.NAMESPACE}} --timeout={{.DEPLOYMENT_TIMEOUT}}
 
   _confirm-undeploy:

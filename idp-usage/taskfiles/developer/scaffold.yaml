@@ -33,7 +33,7 @@ tasks:
       - sh: '! test -d "{{.OUTPUT_DIR}}/{{.APP_NAME}}"'
         msg: "Application {{.APP_NAME}} already exists"
     cmds:
-      - echo "🏗️ Creating new application {{.APP_NAME}} from {{.TEMPLATE}} template"
+      - echo "Creating new application {{.APP_NAME}} from {{.TEMPLATE}} template"
       - task: _validate-template
         vars:
           TEMPLATE: '{{.TEMPLATE}}'
@@ -47,8 +47,8 @@ tasks:
           APP_NAME: '{{.APP_NAME}}'
           TEMPLATE: '{{.TEMPLATE}}'
           OUTPUT_DIR: '{{.OUTPUT_DIR}}'
-      - echo "✅ Application {{.APP_NAME}} created successfully"
-      - echo "📁 Location {{.OUTPUT_DIR}}/{{.APP_NAME}}"
+      - echo "Application {{.APP_NAME}} created successfully"
+      - echo "Location {{.OUTPUT_DIR}}/{{.APP_NAME}}"
 
   # ===============================
   # Template Management
@@ -57,7 +57,7 @@ tasks:
   list-templates:
     desc: List available application templates
     cmds:
-      - echo "📋 Available Application Templates"
+      - echo "Available Application Templates"
       - echo "================================="
       - echo ""
       - echo "🔹 go-service        - Go web service with Gin framework"
@@ -75,7 +75,7 @@ tasks:
     vars:
       TEMPLATE_NAME: '{{.TEMPLATE_NAME}}'
     cmds:
-      - echo "🏗️ Creating new template {{.TEMPLATE_NAME}}"
+      - echo "Creating new template {{.TEMPLATE_NAME}}"
       - task: _create-template-structure
         vars:
           TEMPLATE_NAME: '{{.TEMPLATE_NAME}}'
@@ -135,7 +135,7 @@ tasks:
       ENDPOINT_NAME: '{{.ENDPOINT_NAME}}'
       METHOD: '{{.METHOD | default "GET"}}'
     cmds:
-      - echo "🔗 Adding {{.METHOD}} endpoint /{{.ENDPOINT_NAME}} to {{.APP_NAME}}"
+      - echo "Adding {{.METHOD}} endpoint /{{.ENDPOINT_NAME}} to {{.APP_NAME}}"
       - task: _add-endpoint-to-app
         vars:
           APP_NAME: '{{.APP_NAME}}'
@@ -148,7 +148,7 @@ tasks:
       APP_NAME: '{{.APP_NAME}}'
       MIDDLEWARE_NAME: '{{.MIDDLEWARE_NAME}}'
     cmds:
-      - echo "⚙️ Adding middleware {{.MIDDLEWARE_NAME}} to {{.APP_NAME}}"
+      - echo "Adding middleware {{.MIDDLEWARE_NAME}} to {{.APP_NAME}}"
       - task: _add-middleware-to-app
         vars:
           APP_NAME: '{{.APP_NAME}}'
@@ -170,7 +170,7 @@ tasks:
           echo "Valid templates: $VALID_TEMPLATES"
           exit 1
         fi
-        echo "✅ Template {{.TEMPLATE}} validated"
+        echo "Template {{.TEMPLATE}} validated"
 
   _create-app-structure:
     internal: true
@@ -186,7 +186,7 @@ tasks:
         mkdir -p {{.OUTPUT_DIR}}/{{.APP_NAME}}/docs
         mkdir -p {{.OUTPUT_DIR}}/{{.APP_NAME}}/tests
         
-        echo "✅ Directory structure created"
+        echo "Directory structure created"
 
   _generate-app-files:
     internal: true

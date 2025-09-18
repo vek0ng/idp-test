@@ -9,7 +9,9 @@ vars:
   CLUSTER_NAME: '{{.CLUSTER_NAME | default "idp-cluster"}}'
   PROVIDER: '{{.PROVIDER | default "kind"}}'
   ENVIRONMENT: '{{.ENVIRONMENT | default "dev"}}'
-  NAMESPACE: '{{.NAMESPACE | default "argocd"}}'
+  
+  # Silent Mode Control
+  # SILENT_MODE: '{{.SILENT_MODE | default "false"}}'
   
   # ArgoCD specific configuration
   ARGOCD_VERSION: '{{.ARGOCD_VERSION | default "stable"}}'
@@ -19,42 +21,152 @@ vars:
 tasks:
 
   # ===============================
+  # Help and Information
+  # ===============================
+
+  help:
+    desc: Show ArgoCD GitOps platform help and available tasks
+    silent: true
+    cmds:
+      - |
+        cat << 'EOF'
+        ArgoCD GitOps Platform Management
+        =================================
+        
+        Available Commands:
+        ------------------
+        install-argocd         - Install and configure ArgoCD GitOps platform
+        uninstall-argocd       - Uninstall ArgoCD GitOps platform
+        status                 - Show ArgoCD status and health
+        health-check           - Comprehensive ArgoCD health check
+        get-admin-password     - Get ArgoCD admin password
+        access-ui              - Access ArgoCD UI (port-forward)
+        
+        Application Management:
+        ----------------------
+        create-application     - Create new ArgoCD application
+        list-applications      - List all ArgoCD applications
+        sync-application       - Sync specific ArgoCD application
+        
+        Usage Examples:
+        --------------
+        # Install ArgoCD on any provider
+        task gitops:install-argocd CLUSTER_NAME=my-cluster PROVIDER=kind
+        task gitops:install-argocd CLUSTER_NAME=prod-cluster PROVIDER=aws
+        
+        # Check status and health
+        task gitops:status
+        task gitops:health-check
+        
+        # Access ArgoCD UI
+        task gitops:get-admin-password
+        task gitops:access-ui
+        
+        # Application lifecycle
+        task gitops:create-application APP_NAME=my-app REPO_URL=https://github.com/user/repo
+        task gitops:list-applications
+        task gitops:sync-application APP_NAME=my-app
+        
+        # Production deployment example
+        task gitops:install-argocd CLUSTER_NAME=production PROVIDER=aws ARGOCD_DOMAIN=argocd.company.com
+        
+        Configuration Variables:
+        -----------------------
+        CLUSTER_NAME          - Target cluster name (default: idp-cluster)
+        PROVIDER              - Cloud provider: kind, aws, gcp, azure (default: kind)
+        ARGOCD_VERSION        - ArgoCD version (default: stable)
+        ARGOCD_DOMAIN         - Custom domain for ArgoCD (default: argocd.local)
+        ADMIN_PASSWORD        - Admin password (default: admin123)
+        ARGO_NAMESPACE        - Namespace for ArgoCD (default: argocd)
+        
+        Integration Notes:
+        -----------------
+        • Works with all supported providers (kind, aws, gcp, azure)
+        • Integrates with Backstage for application visualization
+        • Supports Crossplane for infrastructure GitOps
+        • Automatic ingress configuration when available
+        • SSL/TLS support for production deployments
+        
+        Common Workflows:
+        ----------------
+        # Complete GitOps setup
+        task gitops:install-argocd && task gitops:access-ui
+        
+        # Deploy application with GitOps
+        task gitops:create-application APP_NAME=my-service REPO_URL=https://github.com/user/my-service
+        task gitops:sync-application APP_NAME=my-service
+        
+        # Monitor and maintain
+        task gitops:health-check
+        task gitops:list-applications
+        EOF
+
+  # ===============================
   # ArgoCD Installation
   # ===============================
 
   install-argocd:
     desc: Install and configure ArgoCD GitOps platform
+    silent: true
     vars:
       VERSION: '{{.ARGOCD_VERSION}}'
       NAMESPACE: '{{.NAMESPACE}}'
       ENABLE_INGRESS: '{{.ENABLE_INGRESS | default "true"}}'
     cmds:
-      - echo "🚀 Installing ArgoCD GitOps platform for {{.PROVIDER}} cluster {{.CLUSTER_NAME}}"
+      - |
+        if [ "{{.SILENT_MODE}}" != "true" ]; then
+          echo "Installing ArgoCD GitOps platform for {{.PROVIDER}} cluster {{.CLUSTER_NAME}}"
+        fi
       - task: _validate-installation
       - task: _install-argocd-core
+        vars:
+          VERSION: '{{.VERSION}}'
+          NAMESPACE: '{{.NAMESPACE}}'
       - task: _configure-argocd
+        vars:
+          NAMESPACE: '{{.NAMESPACE}}'
       - task: _setup-ingress
         vars:
           ENABLE_INGRESS: '{{.ENABLE_INGRESS}}'
+          NAMESPACE: '{{.NAMESPACE}}'
+          DOMAIN: '{{.ARGOCD_DOMAIN}}'
       - task: _verify-installation
-      - echo "✅ ArgoCD installation complete"
+        vars:
+          NAMESPACE: '{{.NAMESPACE}}'
+      - |
+        if [ "{{.SILENT_MODE}}" != "true" ]; then
+          echo "ArgoCD installation complete"
+        fi
 
   uninstall-argocd:
     desc: Uninstall ArgoCD GitOps platform
+    silent: true
     vars:
       NAMESPACE: '{{.NAMESPACE}}'
     cmds:
-      - echo "🗑️ Uninstalling ArgoCD from namespace {{.NAMESPACE}}"
+      - |
+        if [ "{{.SILENT_MODE}}" != "true" ]; then
+          echo "Uninstalling ArgoCD from namespace {{.NAMESPACE}}"
+        fi
       - task: _confirm-uninstall
+        vars:
+          NAMESPACE: '{{.NAMESPACE}}'
       - kubectl delete namespace {{.NAMESPACE}} --ignore-not-found=true
-      - echo "✅ ArgoCD uninstalled successfully"
+      - |
+        if [ "{{.SILENT_MODE}}" != "true" ]; then
+          echo "ArgoCD uninstalled successfully"
+        fi
 
   get-admin-password:
     desc: Get ArgoCD admin password
+    silent: true
     vars:
       NAMESPACE: '{{.NAMESPACE}}'
     cmds:
-      - echo "🔑 ArgoCD Admin Password"
+      - |
+        if [ "{{.SILENT_MODE}}" != "true" ]; then
+          echo "ArgoCD Admin Password"
+        fi
       - |
         if kubectl get secret argocd-initial-admin-secret -n {{.NAMESPACE}} >/dev/null 2>&1; then
           kubectl get secret argocd-initial-admin-secret -n {{.NAMESPACE}} -o jsonpath="{.data.password}" | base64 -d
@@ -65,12 +177,16 @@ tasks:
 
   access-ui:
     desc: Access ArgoCD UI (port-forward)
+    silent: true
     vars:
       NAMESPACE: '{{.NAMESPACE}}'
       PORT: '{{.PORT | default "8080"}}'
     cmds:
-      - echo "🌐 Starting ArgoCD UI port-forward to localhost {{.PORT}}"
-      - echo "Username admin"
+      - |
+        if [ "{{.SILENT_MODE}}" != "true" ]; then
+          echo "Starting ArgoCD UI port-forward to localhost {{.PORT}}"
+          echo "Username admin"
+        fi
       - task: get-admin-password
       - kubectl port-forward svc/argocd-server -n {{.NAMESPACE}} {{.PORT}}:443
 
@@ -80,25 +196,37 @@ tasks:
 
   list-applications:
     desc: List all ArgoCD applications
+    silent: true
     vars:
       NAMESPACE: '{{.NAMESPACE}}'
       OUTPUT: '{{.OUTPUT | default "wide"}}'
     cmds:
-      - echo "📱 ArgoCD Applications in {{.NAMESPACE}}"
+      - |
+        if [ "{{.SILENT_MODE}}" != "true" ]; then
+          echo "ArgoCD Applications in {{.NAMESPACE}}"
+        fi
       - |
         if kubectl get applications -n {{.NAMESPACE}} >/dev/null 2>&1; then
-          kubectl get applications -n {{.NAMESPACE}} -o {{.OUTPUT}}
+          if [ "{{.SILENT_MODE}}" != "true" ]; then
+            kubectl get applications -n {{.NAMESPACE}} -o {{.OUTPUT}}
+          fi
         else
-          echo "ℹ️ No ArgoCD applications found"
+          if [ "{{.SILENT_MODE}}" != "true" ]; then
+            echo "No ArgoCD applications found"
+          fi
         fi
 
   sync-application:
     desc: Sync specific ArgoCD application
+    silent: true
     vars:
       APP_NAME: '{{.APP_NAME}}'
       NAMESPACE: '{{.NAMESPACE}}'
     cmds:
-      - echo "🔄 Syncing ArgoCD application {{.APP_NAME}}"
+      - |
+        if [ "{{.SILENT_MODE}}" != "true" ]; then
+          echo "Syncing ArgoCD application {{.APP_NAME}}"
+        fi
       - |
         if command -v argocd >/dev/null 2>&1; then
           argocd app sync {{.APP_NAME}} --grpc-web
@@ -108,6 +236,7 @@ tasks:
 
   create-application:
     desc: Create new ArgoCD application
+    silent: true
     vars:
       APP_NAME: '{{.APP_NAME}}'
       REPO_URL: '{{.REPO_URL}}'
@@ -115,7 +244,10 @@ tasks:
       TARGET_NAMESPACE: '{{.TARGET_NAMESPACE | default "default"}}'
       NAMESPACE: '{{.NAMESPACE}}'
     cmds:
-      - echo "📱 Creating ArgoCD application {{.APP_NAME}}"
+      - |
+        if [ "{{.SILENT_MODE}}" != "true" ]; then
+          echo "Creating ArgoCD application {{.APP_NAME}}"
+        fi
       - |
         cat << EOF | kubectl apply -f -
         apiVersion: argoproj.io/v1alpha1
@@ -144,35 +276,51 @@ tasks:
 
   status:
     desc: Show ArgoCD status and health
+    silent: true
     vars:
       NAMESPACE: '{{.NAMESPACE}}'
     cmds:
-      - echo "📊 ArgoCD Status in {{.NAMESPACE}}"
-      - echo "=================================="
-      - echo ""
-      - echo "🏃 Pods Status"
+      - |
+        if [ "{{.SILENT_MODE}}" != "true" ]; then
+          echo "ArgoCD Status in {{.NAMESPACE}}"
+          echo "=================================="
+          echo ""
+          echo "Pods Status"
+        fi
       - kubectl get pods -n {{.NAMESPACE}} -o wide
-      - echo ""
-      - echo "🌐 Services Status"  
+      - |
+        if [ "{{.SILENT_MODE}}" != "true" ]; then
+          echo ""
+          echo "Services Status"
+        fi
       - kubectl get svc -n {{.NAMESPACE}}
-      - echo ""
-      - echo "📱 Applications Summary"
+      - |
+        if [ "{{.SILENT_MODE}}" != "true" ]; then
+          echo ""
+          echo "Applications Summary"
+        fi
       - task: list-applications
         vars:
           OUTPUT: "custom-columns=NAME:.metadata.name,HEALTH:.status.health.status,SYNC:.status.sync.status,REVISION:.status.sync.revision"
 
   health-check:
     desc: Comprehensive ArgoCD health check
+    silent: true
     vars:
       NAMESPACE: '{{.NAMESPACE}}'
     cmds:
-      - echo "🏥 ArgoCD Health Check"
-      - echo "====================="
-      - echo ""
+      - |
+        if [ "{{.SILENT_MODE}}" != "true" ]; then
+          echo "ArgoCD Health Check"
+          echo "====================="
+          echo ""
+        fi
       - |
         # Check namespace
         if kubectl get namespace {{.NAMESPACE}} >/dev/null 2>&1; then
-          echo "✅ Namespace {{.NAMESPACE}} exists"
+          if [ "{{.SILENT_MODE}}" != "true" ]; then
+            echo "Namespace {{.NAMESPACE}} exists"
+          fi
         else
           echo "❌ Namespace {{.NAMESPACE}} not found"
           exit 1
@@ -185,7 +333,9 @@ tasks:
             READY=$(kubectl get deployment $component -n {{.NAMESPACE}} -o jsonpath='{.status.readyReplicas}')
             DESIRED=$(kubectl get deployment $component -n {{.NAMESPACE}} -o jsonpath='{.spec.replicas}')
             if [ "$READY" = "$DESIRED" ]; then
-              echo "✅ $component ($READY/$DESIRED ready)"
+              if [ "{{.SILENT_MODE}}" != "true" ]; then
+                echo "$component ($READY/$DESIRED ready)"
+              fi
             else
               echo "❌ $component ($READY/$DESIRED ready)"
             fi
@@ -200,8 +350,12 @@ tasks:
 
   _validate-installation:
     internal: true
+    silent: true
     cmds:
-      - echo "🔍 Validating ArgoCD installation prerequisites"
+      - |
+        if [ "{{.SILENT_MODE}}" != "true" ]; then
+          echo "Validating ArgoCD installation prerequisites"
+        fi
       - |
         # Check if kubectl is available
         if ! command -v kubectl >/dev/null 2>&1; then
@@ -215,15 +369,21 @@ tasks:
           exit 1
         fi
         
-        echo "✅ Prerequisites validated"
+        if [ "{{.SILENT_MODE}}" != "true" ]; then
+          echo "Prerequisites validated"
+        fi
 
   _install-argocd-core:
     internal: true
+    silent: true
     vars:
       NAMESPACE: '{{.NAMESPACE}}'
       VERSION: '{{.ARGOCD_VERSION}}'
     cmds:
-      - echo "⚙️ Installing ArgoCD core components"
+      - |
+        if [ "{{.SILENT_MODE}}" != "true" ]; then
+          echo "Installing ArgoCD core components"
+        fi
       - |
         # Create namespace
         kubectl create namespace {{.NAMESPACE}} --dry-run=client -o yaml | kubectl apply -f -
@@ -240,10 +400,14 @@ tasks:
 
   _configure-argocd:
     internal: true
+    silent: true
     vars:
       NAMESPACE: '{{.NAMESPACE}}'
     cmds:
-      - echo "⚙️ Configuring ArgoCD"
+      - |
+        if [ "{{.SILENT_MODE}}" != "true" ]; then
+          echo "Configuring ArgoCD"
+        fi
       - |
         # Configure ArgoCD server for insecure mode (useful for port-forwarding)
         kubectl patch configmap argocd-cmd-params-cm -n {{.NAMESPACE}} --type merge --patch='{"data":{"server.insecure":"true"}}'
@@ -253,6 +417,7 @@ tasks:
 
   _setup-ingress:
     internal: true
+    silent: true
     vars:
       ENABLE_INGRESS: '{{.ENABLE_INGRESS}}'
       NAMESPACE: '{{.NAMESPACE}}'
@@ -260,7 +425,9 @@ tasks:
     cmds:
       - |
         if [ "{{.ENABLE_INGRESS}}" = "true" ]; then
-          echo "🌐 Setting up ArgoCD ingress"
+          if [ "{{.SILENT_MODE}}" != "true" ]; then
+            echo "Setting up ArgoCD ingress"
+          fi
           cat << EOF | kubectl apply -f -
           apiVersion: networking.k8s.io/v1
           kind: Ingress
@@ -286,32 +453,58 @@ tasks:
                         number: 80
         EOF
         else
-          echo "⏭️ Skipping ingress setup"
+          if [ "{{.SILENT_MODE}}" != "true" ]; then
+            echo "Skipping ingress setup"
+          fi
         fi
 
   _verify-installation:
     internal: true
+    silent: true
     vars:
       NAMESPACE: '{{.NAMESPACE}}'
     cmds:
-      - echo "✅ Verifying ArgoCD installation"
       - |
-        # Wait for all components to be ready
-        kubectl wait --for=condition=ready pod -l app.kubernetes.io/part-of=argocd -n {{.NAMESPACE}} --timeout=300s
-        echo "✅ All ArgoCD components are ready"
+        if [ "{{.SILENT_MODE}}" != "true" ]; then
+          echo "Verifying ArgoCD installation"
+        fi
+      - |
+        # Wait for deployments to be ready
+        kubectl wait --for=condition=available --timeout=300s deployment -l app.kubernetes.io/part-of=argocd -n {{.NAMESPACE}} || true
+        
+        # Wait for statefulset to be ready
+        kubectl wait --for=condition=ready --timeout=300s pod -l app.kubernetes.io/name=argocd-application-controller -n {{.NAMESPACE}} || true
+        
+        # Final verification - check if all expected pods are running
+        if [ "{{.SILENT_MODE}}" != "true" ]; then
+          echo "Checking pod status..."
+        fi
+        if kubectl get pods -n {{.NAMESPACE}} | grep -v Terminating | grep -E "(argocd-server|argocd-repo-server|argocd-redis|argocd-dex-server|argocd-notifications-controller|argocd-applicationset-controller|argocd-application-controller)" | grep -q "1/1.*Running"; then
+          if [ "{{.SILENT_MODE}}" != "true" ]; then
+            echo "All ArgoCD components are ready"
+          fi
+        else
+          if [ "{{.SILENT_MODE}}" != "true" ]; then
+            echo "Some components may still be starting up"
+            kubectl get pods -n {{.NAMESPACE}}
+          fi
+        fi
 
   _confirm-uninstall:
     internal: true
+    silent: true
     vars:
       NAMESPACE: '{{.NAMESPACE}}'
     cmds:
       - |
-        echo "⚠️ WARNING This will delete all ArgoCD resources in namespace {{.NAMESPACE}}"
-        echo "This action cannot be undone."
-        echo ""
-        read -p "Are you sure you want to continue? (y/N) " -n 1 -r
-        echo ""
-        if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-          echo "❌ Operation cancelled"
-          exit 1
+        if [ "{{.SILENT_MODE}}" != "true" ]; then
+          echo "⚠️ WARNING: This will delete all ArgoCD resources in namespace {{.NAMESPACE}}"
+          echo "This action cannot be undone."
+          echo ""
+          read -p "Are you sure you want to continue? (y/N) " -n 1 -r
+          echo ""
+          if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+            echo "Operation cancelled"
+            exit 1
+          fi
         fi

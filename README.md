@@ -10,26 +10,37 @@ The repository is structured as follows:
 .
 ├── README.md
 ├── examples
-│   ├── README.md
-│   ├── advanced
-│   └── workflows
+│   ├── README.md
+│   ├── advanced
+│   └── workflows
 ├── idp-builder
-│   ├── Taskfile.yaml
-│   ├── configs
-│   ├── docs
-│   ├── examples
-│   ├── scripts
-│   └── taskfiles
+│   ├── README.md
+│   ├── Taskfile.yaml
+│   ├── configs
+│   ├── docs
+│   ├── examples
+│   ├── scripts
+│   └── taskfiles
 └── idp-usage
-    ├── README.md
-    ├── Taskfile.yaml
-    ├── apps
-    ├── docs
-    ├── examples
-    ├── taskfiles
-    └── templates
+    ├── README.md
+    ├── Taskfile.yaml
+    ├── apps
+    ├── docs
+    ├── examples
+    ├── taskfiles
+    └── templates
 ```
 
 - `examples/`: Contains example configurations and workflows for deploying the IDP stack.
 - `idp-builder/`: Contains scripts and configurations for building the IDP stack.
 - `idp-usage/`: Contains scripts and configurations for using the deployed IDP stack
+
+Install `Task` CLI from https://taskfile.dev/#/installation and start with:
+
+```bash
+cd idp-builder
+task or task help
+```
+
+This project is a work in progress. Please refer to the [examples/README.md](examples/README.md) for usage patterns, learning paths, and contribution guidelines.
+

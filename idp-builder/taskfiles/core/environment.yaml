@@ -11,8 +11,55 @@ vars:
   PROVIDER: '{{.PROVIDER | default "kind"}}'
   ENVIRONMENT: '{{.ENVIRONMENT | default "dev"}}'
   REGION: '{{.REGION | default "ap-southeast-1"}}'
+  
+  # Silent Mode Control
+  SILENT_MODE: '{{.SILENT_MODE | default "false"}}'
 
 tasks:
+
+  # ===============================
+  # Help and Information
+  # ===============================
+
+  help:
+    desc: Show environment management help and available tasks
+    silent: true
+    cmds:
+      - |
+        cat << 'EOF'
+        🌍 Environment Configuration Management
+        =====================================
+        
+        Available Commands:
+        ------------------
+        validate              - Validate all required environment variables
+        show-config          - Show current configuration values  
+        set-variable         - Set environment variable safely (KEY and VALUE required)
+        get-variable         - Retrieve environment variable value (KEY required)
+        load-config          - Load configuration from environment file
+        save-defaults        - Save current default values to environment file
+        
+        Usage Examples:
+        --------------
+        task environment:help
+        task environment:validate
+        task environment:show-config
+        task environment:set-variable KEY=CLUSTER_NAME VALUE=my-cluster
+        task environment:get-variable KEY=PROVIDER
+        task environment:load-config
+        task environment:save-defaults
+        
+        Environment Variables:
+        ---------------------
+        CLUSTER_NAME         - Name of the Kubernetes cluster (default: idp-cluster)
+        PROVIDER            - Cloud provider (default: kind)
+        ENVIRONMENT         - Environment type (default: dev)  
+        REGION              - Cloud region (default: ap-southeast-1)
+        
+        Configuration Files:
+        -------------------
+        .env                - Environment variable file (customizable via ENV_FILE)
+        EOF
 
   # ===============================
   # Environment Variable Management
@@ -20,29 +67,40 @@ tasks:
 
   validate:
     desc: Validate all required environment variables
+    silent: true
     cmds:
-      - echo "🔍 Validating environment configuration..."
+      - |
+        if [ "{{.SILENT_MODE}}" != "true" ]; then
+          echo "Validating environment configuration..."
+        fi
       - task: _validate-cluster-name
       - task: _validate-provider
       - task: _validate-environment
       - task: _validate-region
-      - echo "✅ Environment validation passed"
+      - |
+        if [ "{{.SILENT_MODE}}" != "true" ]; then
+          echo "Environment validation passed"
+        fi
 
   show-config:
     desc: Show current configuration values
+    silent: true
     cmds:
       - |
-        cat << 'EOF'
-        📋 Current Environment Configuration:
+        if [ "{{.SILENT_MODE}}" != "true" ]; then
+          cat << 'EOF'
+        Current Environment Configuration:
         ====================================
         CLUSTER_NAME: {{.CLUSTER_NAME}}
         PROVIDER: {{.PROVIDER}}
         ENVIRONMENT: {{.ENVIRONMENT}}
         REGION: {{.REGION}}
         EOF
+        fi
 
   set-variable:
     desc: Set environment variable safely (KEY and VALUE required)
+    silent: true
     vars:
       KEY: '{{.KEY}}'
       VALUE: '{{.VALUE}}'
@@ -59,10 +117,14 @@ tasks:
         vars:
           KEY: '{{.KEY}}'
           VALUE: '{{.VALUE}}'
-      - echo "✅ Set {{.KEY}}={{.VALUE}} in {{.ENV_FILE}}"
+      - |
+        if [ "{{.SILENT_MODE}}" != "true" ]; then
+          echo "Set {{.KEY}}={{.VALUE}} in {{.ENV_FILE}}"
+        fi
 
   get-variable:
     desc: Retrieve environment variable value (KEY required)
+    silent: true
     vars:
       KEY: '{{.KEY}}'
     preconditions:
@@ -80,22 +142,33 @@ tasks:
 
   load-config:
     desc: Load configuration from environment file
+    silent: true
     cmds:
       - |
         if [ -f {{.ENV_FILE}} ]; then
-          echo "📂 Loading configuration from {{.ENV_FILE}}"
+          if [ "{{.SILENT_MODE}}" != "true" ]; then
+            echo "📂 Loading configuration from {{.ENV_FILE}}"
+          fi
           set -a
           source {{.ENV_FILE}}
           set +a
-          echo "✅ Configuration loaded"
+          if [ "{{.SILENT_MODE}}" != "true" ]; then
+            echo "Configuration loaded"
+          fi
         else
-          echo "⚠️ No {{.ENV_FILE}} file found, using defaults"
+          if [ "{{.SILENT_MODE}}" != "true" ]; then
+            echo "⚠️ No {{.ENV_FILE}} file found, using defaults"
+          fi
         fi
 
   save-defaults:
     desc: Save current default values to environment file
+    silent: true
     cmds:
-      - echo "💾 Saving default configuration to {{.ENV_FILE}}"
+      - |
+        if [ "{{.SILENT_MODE}}" != "true" ]; then
+          echo "Saving default configuration to {{.ENV_FILE}}"
+        fi
       - task: set-variable
         vars:
           KEY: "CLUSTER_NAME"
@@ -112,7 +185,10 @@ tasks:
         vars:
           KEY: "REGION"
           VALUE: "{{.REGION}}"
-      - echo "✅ Default configuration saved"
+      - |
+        if [ "{{.SILENT_MODE}}" != "true" ]; then
+          echo "Default configuration saved"
+        fi
 
   # ===============================
   # Internal Helper Tasks
@@ -120,6 +196,7 @@ tasks:
 
   _validate-cluster-name:
     internal: true
+    silent: true
     cmds:
       - |
         CLUSTER_NAME="{{.CLUSTER_NAME}}"
@@ -131,15 +208,20 @@ tasks:
           echo "❌ CLUSTER_NAME must be 63 characters or less {{.CLUSTER_NAME}}"
           exit 1
         fi
-        echo "✅ CLUSTER_NAME is valid {{.CLUSTER_NAME}}"
+        if [ "{{.SILENT_MODE}}" != "true" ]; then
+          echo "CLUSTER_NAME is valid {{.CLUSTER_NAME}}"
+        fi
 
   _validate-provider:
     internal: true
+    silent: true
     cmds:
       - |
         case "{{.PROVIDER}}" in
           kind|aws|gcp|azure)
-            echo "✅ PROVIDER is valid {{.PROVIDER}}"
+            if [ "{{.SILENT_MODE}}" != "true" ]; then
+              echo "PROVIDER is valid {{.PROVIDER}}"
+            fi
             ;;
           *)
             echo "❌ PROVIDER must be one of kind, aws, gcp, azure (got {{.PROVIDER}})"
@@ -149,11 +231,14 @@ tasks:
 
   _validate-environment:
     internal: true
+    silent: true
     cmds:
       - |
         case "{{.ENVIRONMENT}}" in
           dev|staging|production)
-            echo "✅ ENVIRONMENT is valid {{.ENVIRONMENT}}"
+            if [ "{{.SILENT_MODE}}" != "true" ]; then
+              echo "ENVIRONMENT is valid {{.ENVIRONMENT}}"
+            fi
             ;;
           *)
             echo "❌ ENVIRONMENT must be one of dev, staging, production (got {{.ENVIRONMENT}})"
@@ -163,16 +248,22 @@ tasks:
 
   _validate-region:
     internal: true
+    silent: true
     cmds:
       - |
         if [ -n "{{.REGION}}" ]; then
-          echo "✅ REGION is set {{.REGION}}"
+          if [ "{{.SILENT_MODE}}" != "true" ]; then
+            echo "REGION is set {{.REGION}}"
+          fi
         else
-          echo "⚠️ REGION is not set, using default"
+          if [ "{{.SILENT_MODE}}" != "true" ]; then
+            echo "⚠️ REGION is not set, using default"
+          fi
         fi
 
   _validate-variable-name:
     internal: true
+    silent: true
     vars:
       KEY: '{{.KEY}}'
     cmds:
@@ -184,6 +275,7 @@ tasks:
 
   _update-environment-file:
     internal: true
+    silent: true
     vars:
       KEY: '{{.KEY}}'
       VALUE: '{{.VALUE}}'

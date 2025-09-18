@@ -116,7 +116,7 @@ All tasks use these standardized parameters:
 - `CLUSTER_NAME` - Target cluster name (default: "idp-cluster")
 - `PROVIDER` - Cloud provider (kind/aws/gcp/azure, default: "kind")
 - `ENVIRONMENT` - Target environment (dev/staging/prod, default: "dev")
-- `REGION` - Cloud region (default: "us-west-2")
+- `REGION` - Cloud region (default: "ap-southeast-1")
 - `APP_NAME` - Application name (default: "sample-go-app")
 - `IMAGE_TAG` - Container image tag (default: "latest")
 

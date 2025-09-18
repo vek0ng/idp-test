@@ -54,7 +54,7 @@ tasks:
           DEVELOPER_NAME: '{{.DEVELOPER_NAME}}'
           CLUSTER_NAME: '{{.CLUSTER_NAME}}'
       - echo ""
-      - echo "✅ Developer onboarding completed successfully!"
+      - echo "Developer onboarding completed successfully!"
       - task: show-next-steps
         vars:
           DEVELOPER_NAME: '{{.DEVELOPER_NAME}}'
@@ -65,19 +65,19 @@ tasks:
       DEVELOPER_NAME: '{{.DEVELOPER_NAME}}'
       CLUSTER_NAME: '{{.CLUSTER_NAME}}'
     cmds:
-      - echo "🔧 Setting up developer environment"
+      - echo "Setting up developer environment"
       - echo "=================================="
       - |
         # Create developer namespace
         NAMESPACE="dev-{{.DEVELOPER_NAME}}"
         kubectl create namespace $NAMESPACE --dry-run=client -o yaml | kubectl apply -f -
-        echo "✅ Created namespace: $NAMESPACE"
+        echo "Created namespace: $NAMESPACE"
       - |
         # Label namespace for identification
         NAMESPACE="dev-{{.DEVELOPER_NAME}}"
         kubectl label namespace $NAMESPACE developer="{{.DEVELOPER_NAME}}" --overwrite
         kubectl label namespace $NAMESPACE environment="development" --overwrite
-        echo "✅ Labeled namespace for developer - {{.DEVELOPER_NAME}}"
+        echo "Labeled namespace for developer - {{.DEVELOPER_NAME}}"
       - |
         # Create resource quota for the namespace
         NAMESPACE="dev-{{.DEVELOPER_NAME}}"
@@ -98,7 +98,7 @@ tasks:
             secrets: "20"
             configmaps: "20"
         EOF
-        echo "✅ Applied resource quota for development namespace"
+        echo "Applied resource quota for development namespace"
       - |
         # Create default network policies
         NAMESPACE="dev-{{.DEVELOPER_NAME}}"
@@ -128,7 +128,7 @@ tasks:
                 matchLabels:
                   name: $NAMESPACE
         EOF
-        echo "✅ Applied default network policies"
+        echo "Applied default network policies"
 
   setup-platform-access:
     desc: Setup developer access to platform tools
@@ -136,13 +136,13 @@ tasks:
       DEVELOPER_NAME: '{{.DEVELOPER_NAME}}'
       CLUSTER_NAME: '{{.CLUSTER_NAME}}'
     cmds:
-      - echo "🔑 Setting up platform access"
+      - echo "Setting up platform access"
       - echo "============================"
       - |
         # Create service account for developer
         NAMESPACE="dev-{{.DEVELOPER_NAME}}"
         kubectl create serviceaccount "{{.DEVELOPER_NAME}}" -n $NAMESPACE --dry-run=client -o yaml | kubectl apply -f -
-        echo "✅ Created service account - {{.DEVELOPER_NAME}}"
+        echo "Created service account - {{.DEVELOPER_NAME}}"
       - |
         # Create role for developer namespace
         NAMESPACE="dev-{{.DEVELOPER_NAME}}"
@@ -163,7 +163,7 @@ tasks:
           resources: ["ingresses"]
           verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
         EOF
-        echo "✅ Created developer role"
+        echo "Created developer role"
       - |
         # Bind role to service account
         NAMESPACE="dev-{{.DEVELOPER_NAME}}"
@@ -171,7 +171,7 @@ tasks:
           --role=developer-role \
           --serviceaccount=$NAMESPACE:{{.DEVELOPER_NAME}} \
           -n $NAMESPACE --dry-run=client -o yaml | kubectl apply -f -
-        echo "✅ Created role binding"
+        echo "Created role binding"
       - |
         # Setup ArgoCD access if available
         if kubectl get namespace argocd >/dev/null 2>&1; then
@@ -200,12 +200,12 @@ tasks:
             - group: 'networking.k8s.io'
               kind: '*'
           EOF
-          echo "✅ Created ArgoCD project for developer"
+          echo "Created ArgoCD project for developer"
         fi
       - |
         # Setup Backstage access if available
         if kubectl get namespace backstage >/dev/null 2>&1; then
-          echo "✅ Backstage integration available - check developer portal"
+          echo "Backstage integration available - check developer portal"
         fi
 
   setup-development-tools:
@@ -213,7 +213,7 @@ tasks:
     vars:
       DEVELOPER_NAME: '{{.DEVELOPER_NAME}}'
     cmds:
-      - echo "🛠️ Setting up development tools"
+      - echo "Setting up development tools"
       - echo "=============================="
       - |
         # Create local development directory structure
@@ -222,7 +222,7 @@ tasks:
         mkdir -p "$DEV_DIR/projects"
         mkdir -p "$DEV_DIR/configs"
         mkdir -p "$DEV_DIR/scripts"
-        echo "✅ Created development directory: $DEV_DIR"
+        echo "Created development directory: $DEV_DIR"
       - |
         # Create kubectl config context
         NAMESPACE="dev-{{.DEVELOPER_NAME}}"
@@ -230,7 +230,7 @@ tasks:
           --cluster=$(kubectl config current-context | cut -d'@' -f2) \
           --namespace=$NAMESPACE \
           --user=$(kubectl config view --minify -o jsonpath='{.users[0].name}')
-        echo "✅ Created kubectl context - {{.DEVELOPER_NAME}}-dev"
+        echo "Created kubectl context - {{.DEVELOPER_NAME}}-dev"
       - |
         # Create development configuration file
         DEV_DIR="./dev-{{.DEVELOPER_NAME}}"
@@ -246,7 +246,7 @@ tasks:
           environment: dev
           registry: localhost:5000
         EOF
-        echo "✅ Created development configuration"
+        echo "Created development configuration"
       - |
         # Create helper scripts
         DEV_DIR="./dev-{{.DEVELOPER_NAME}}"
@@ -256,7 +256,7 @@ tasks:
         echo "Switched to development context for {{.DEVELOPER_NAME}}"
         EOF
         chmod +x "$DEV_DIR/scripts/switch-context.sh"
-        echo "✅ Created helper scripts"
+        echo "Created helper scripts"
 
   create-sample-application:
     desc: Create and deploy a sample application for the developer
@@ -265,7 +265,7 @@ tasks:
       APP_NAME: '{{.APP_NAME}}'
       TEMPLATE: '{{.TEMPLATE}}'
     cmds:
-      - echo "🚀 Creating sample application"
+      - echo "Creating sample application"
       - echo "============================="
       - echo "App Name - {{.APP_NAME}}"
       - echo "Template - {{.TEMPLATE}}"
@@ -289,16 +289,16 @@ tasks:
             task scaffold:create-go-service APP_NAME={{.APP_NAME}}
             ;;
         esac
-        echo "✅ Created sample application - {{.APP_NAME}}"
+        echo "Created sample application - {{.APP_NAME}}"
       - |
         # Build the sample application
         task build:build APP_NAME={{.APP_NAME}}
-        echo "✅ Built sample application"
+        echo "Built sample application"
       - |
         # Deploy to developer namespace
         NAMESPACE="dev-{{.DEVELOPER_NAME}}"
         task deploy:deploy-dev APP_NAME={{.APP_NAME}} NAMESPACE=$NAMESPACE
-        echo "✅ Deployed sample application to development namespace"
+        echo "Deployed sample application to development namespace"
 
   validate-onboarding:
     desc: Validate that onboarding was successful
@@ -306,13 +306,13 @@ tasks:
       DEVELOPER_NAME: '{{.DEVELOPER_NAME}}'
       CLUSTER_NAME: '{{.CLUSTER_NAME}}'
     cmds:
-      - echo "✅ Validating onboarding setup"
+      - echo "Validating onboarding setup"
       - echo "=============================="
       - |
         # Check namespace exists
         NAMESPACE="dev-{{.DEVELOPER_NAME}}"
         if kubectl get namespace $NAMESPACE >/dev/null 2>&1; then
-          echo "✅ Developer namespace exists: $NAMESPACE"
+          echo "Developer namespace exists: $NAMESPACE"
         else
           echo "❌ Developer namespace missing: $NAMESPACE"
           exit 1
@@ -321,7 +321,7 @@ tasks:
         # Check service account exists
         NAMESPACE="dev-{{.DEVELOPER_NAME}}"
         if kubectl get serviceaccount "{{.DEVELOPER_NAME}}" -n $NAMESPACE >/dev/null 2>&1; then
-          echo "✅ Service account exists - {{.DEVELOPER_NAME}}"
+          echo "Service account exists - {{.DEVELOPER_NAME}}"
         else
           echo "❌ Service account missing - {{.DEVELOPER_NAME}}"
         fi
@@ -329,7 +329,7 @@ tasks:
         # Check role binding exists
         NAMESPACE="dev-{{.DEVELOPER_NAME}}"
         if kubectl get rolebinding "{{.DEVELOPER_NAME}}-binding" -n $NAMESPACE >/dev/null 2>&1; then
-          echo "✅ Role binding exists"
+          echo "Role binding exists"
         else
           echo "❌ Role binding missing"
         fi
@@ -338,18 +338,18 @@ tasks:
         NAMESPACE="dev-{{.DEVELOPER_NAME}}"
         RUNNING_PODS=$(kubectl get pods -n $NAMESPACE --no-headers 2>/dev/null | grep -c "Running" || echo "0")
         if [ "$RUNNING_PODS" -gt 0 ]; then
-          echo "✅ Sample application pods running: $RUNNING_PODS"
+          echo "Sample application pods running: $RUNNING_PODS"
         else
           echo "⚠️ No running pods found (may still be starting up)"
         fi
       - |
         # Check kubectl context
         if kubectl config get-contexts | grep -q "{{.DEVELOPER_NAME}}-dev"; then
-          echo "✅ Kubectl context created - {{.DEVELOPER_NAME}}-dev"
+          echo "Kubectl context created - {{.DEVELOPER_NAME}}-dev"
         else
           echo "❌ Kubectl context missing - {{.DEVELOPER_NAME}}-dev"
         fi
-      - echo "✅ Onboarding validation complete"
+      - echo "Onboarding validation complete"
 
   show-next-steps:
     desc: Show next steps and resources for the developer
@@ -399,7 +399,7 @@ tasks:
           • Config: ./dev-{{.DEVELOPER_NAME}}/configs/dev-config.yaml
           • Projects: ./dev-{{.DEVELOPER_NAME}}/projects/
         
-        🚀 Happy coding!
+        Happy coding!
         EOF
 
   onboard-team:
@@ -430,14 +430,14 @@ tasks:
           task onboard-developer DEVELOPER_NAME="$developer" CLUSTER_NAME={{.CLUSTER_NAME}}
           echo ""
         done
-      - echo "✅ Team onboarding completed!"
+      - echo "Team onboarding completed!"
 
   create-team-resources:
     desc: Create shared resources for a development team
     vars:
       TEAM_NAME: '{{.TEAM_NAME}}'
     cmds:
-      - echo "🏗️ Creating team resources"
+      - echo "Creating team resources"
       - echo "========================="
       - |
         # Create team namespace
@@ -445,7 +445,7 @@ tasks:
         kubectl create namespace $TEAM_NAMESPACE --dry-run=client -o yaml | kubectl apply -f -
         kubectl label namespace $TEAM_NAMESPACE team="{{.TEAM_NAME}}" --overwrite
         kubectl label namespace $TEAM_NAMESPACE type="team-shared" --overwrite
-        echo "✅ Created team namespace: $TEAM_NAMESPACE"
+        echo "Created team namespace: $TEAM_NAMESPACE"
       - |
         # Create team resource quota
         TEAM_NAMESPACE="team-{{.TEAM_NAME}}"
@@ -464,7 +464,7 @@ tasks:
             persistentvolumeclaims: "20"
             services: "50"
         EOF
-        echo "✅ Applied team resource quota"
+        echo "Applied team resource quota"
       - |
         # Create shared ConfigMap for team settings
         TEAM_NAMESPACE="team-{{.TEAM_NAME}}"
@@ -472,7 +472,7 @@ tasks:
           --from-literal=team-name="{{.TEAM_NAME}}" \
           --from-literal=created-date="$(date -I)" \
           -n $TEAM_NAMESPACE --dry-run=client -o yaml | kubectl apply -f -
-        echo "✅ Created team configuration"
+        echo "Created team configuration"
 
   cleanup-developer:
     desc: Clean up developer resources (DESTRUCTIVE)
@@ -481,7 +481,7 @@ tasks:
     preconditions:
       - test -n "{{.DEVELOPER_NAME}}" # Require developer name
     cmds:
-      - echo "🗑️ Cleaning up developer resources"
+      - echo "Cleaning up developer resources"
       - echo "================================="
       - echo "Developer - {{.DEVELOPER_NAME}}"
       - echo "WARNING - This will delete all developer resources"
@@ -490,26 +490,26 @@ tasks:
         NAMESPACE="dev-{{.DEVELOPER_NAME}}"
         if kubectl get namespace $NAMESPACE >/dev/null 2>&1; then
           kubectl delete namespace $NAMESPACE
-          echo "✅ Deleted namespace: $NAMESPACE"
+          echo "Deleted namespace: $NAMESPACE"
         fi
       - |
         # Remove kubectl context
         kubectl config delete-context "{{.DEVELOPER_NAME}}-dev" 2>/dev/null || echo "Context already removed"
-        echo "✅ Removed kubectl context"
+        echo "Removed kubectl context"
       - |
         # Clean up local development directory
         DEV_DIR="./dev-{{.DEVELOPER_NAME}}"
         if [ -d "$DEV_DIR" ]; then
           rm -rf "$DEV_DIR"
-          echo "✅ Removed local development directory"
+          echo "Removed local development directory"
         fi
       - |
         # Clean up ArgoCD project if exists
         if kubectl get appproject "{{.DEVELOPER_NAME}}-project" -n argocd >/dev/null 2>&1; then
           kubectl delete appproject "{{.DEVELOPER_NAME}}-project" -n argocd
-          echo "✅ Removed ArgoCD project"
+          echo "Removed ArgoCD project"
         fi
-      - echo "✅ Developer cleanup completed"
+      - echo "Developer cleanup completed"
 
   help:
     desc: Show onboarding workflow help and examples

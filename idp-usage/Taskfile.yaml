@@ -2,7 +2,7 @@ version: '3'
 
 # ===============================
 # IDP Stack - Application Usage
-# ===============================
+# ============      - echo "Quick starting application {{.APP_NAME}}"==================
 # This is the main taskfile for application developers using the IDP Stack.
 # It provides convenient access to all application lifecycle management tasks.
 
@@ -11,7 +11,7 @@ vars:
   CLUSTER_NAME: '{{.CLUSTER_NAME | default "idp-cluster"}}'
   PROVIDER: '{{.PROVIDER | default "kind"}}'
   ENVIRONMENT: '{{.ENVIRONMENT | default "dev"}}'
-  REGION: '{{.REGION | default "us-west-2"}}'
+  REGION: '{{.REGION | default "ap-southeast-1"}}'
   APP_NAME: '{{.APP_NAME | default "sample-go-app"}}'
   IMAGE_TAG: '{{.IMAGE_TAG | default "latest"}}'
 
@@ -36,11 +36,13 @@ tasks:
 
   default:
     desc: Show available application development tasks
+    silent: true
     cmds:
       - task: help
 
   help:
     desc: Show comprehensive help for application developers
+    silent: true
     cmds:
       - |
         cat << 'EOF'
@@ -84,12 +86,13 @@ tasks:
 
   quick-start:
     desc: Quick start - create, build, and deploy an application
+    silent: true
     vars:
       APP_NAME: '{{.APP_NAME}}'
       PROVIDER: '{{.PROVIDER}}'
       ENVIRONMENT: '{{.ENVIRONMENT}}'
     cmds:
-      - echo "🚀 Quick starting application {{.APP_NAME}}"
+      - echo "Quick starting application {{.APP_NAME}}"
       - echo "============================================="
       - |
         if [ ! -d "apps/{{.APP_NAME}}" ]; then
@@ -98,23 +101,24 @@ tasks:
         else
           echo "📁 Using existing application {{.APP_NAME}}"
         fi
-      - echo "🏗️ Building application"
+      - echo "Building application"
       - task build:all APP_NAME={{.APP_NAME}}
       - echo "🧪 Running tests"
       - task test:unit-test APP_NAME={{.APP_NAME}}
-      - echo "🚀 Deploying to {{.ENVIRONMENT}}"
+      - echo "Deploying to {{.ENVIRONMENT}}"
       - task deploy:{{.ENVIRONMENT}} APP_NAME={{.APP_NAME}} PROVIDER={{.PROVIDER}}
-      - echo "✅ Quick start complete!"
+      - echo "Quick start complete!"
 
   new-app:
     desc: Create a new application from template
+    silent: true
     vars:
       APP_NAME: '{{.APP_NAME}}'
       TEMPLATE: '{{.TEMPLATE | default "go-api"}}'
     cmds:
       - echo "📦 Creating new application {{.APP_NAME}}"
       - task scaffold:create-app APP_NAME={{.APP_NAME}} TEMPLATE={{.TEMPLATE}}
-      - echo "✅ Application {{.APP_NAME}} created successfully"
+      - echo "Application {{.APP_NAME}} created successfully"
       - echo ""
       - echo "Next steps:"
       - echo "  cd apps/{{.APP_NAME}}"
@@ -126,20 +130,22 @@ tasks:
 
   full-cycle:
     desc: Complete development cycle - build, test, and deploy
+    silent: true
     vars:
       APP_NAME: '{{.APP_NAME}}'
       ENVIRONMENT: '{{.ENVIRONMENT}}'
       PROVIDER: '{{.PROVIDER}}'
     cmds:
-      - echo "🔄 Full development cycle for {{.APP_NAME}}"
+      - echo "Full development cycle for {{.APP_NAME}}"
       - echo "============================================="
       - task build:all APP_NAME={{.APP_NAME}}
       - task test:all APP_NAME={{.APP_NAME}}
       - task deploy:{{.ENVIRONMENT}} APP_NAME={{.APP_NAME}} PROVIDER={{.PROVIDER}}
-      - echo "✅ Full cycle complete!"
+      - echo "Full cycle complete!"
 
   dev-cycle:
     desc: Development cycle - build and deploy to dev environment
+    silent: true
     vars:
       APP_NAME: '{{.APP_NAME}}'
       PROVIDER: '{{.PROVIDER}}'
@@ -148,23 +154,24 @@ tasks:
       - echo "======================================"
       - task build:build APP_NAME={{.APP_NAME}}
       - task deploy:deploy-dev APP_NAME={{.APP_NAME}} PROVIDER={{.PROVIDER}}
-      - echo "✅ Development deployment complete!"
+      - echo "Development deployment complete!"
 
   prod-deploy:
     desc: Production deployment workflow
+    silent: true
     vars:
       APP_NAME: '{{.APP_NAME}}'
       PROVIDER: '{{.PROVIDER}}'
       IMAGE_TAG: '{{.IMAGE_TAG}}'
     cmds:
-      - echo "🚀 Production deployment for {{.APP_NAME}}"
+      - echo "Production deployment for {{.APP_NAME}}"
       - echo "==========================================="
       - echo "⚠️ This will deploy to production. Continue? (Ctrl+C to abort)"
       - read -p "Press Enter to continue..."
       - task test:all APP_NAME={{.APP_NAME}}
       - task build:release APP_NAME={{.APP_NAME}} IMAGE_TAG={{.IMAGE_TAG}}
       - task deploy:prod APP_NAME={{.APP_NAME}} PROVIDER={{.PROVIDER}} IMAGE_TAG={{.IMAGE_TAG}}
-      - echo "✅ Production deployment complete!"
+      - echo "Production deployment complete!"
 
   # ===============================
   # Application Management
@@ -172,8 +179,9 @@ tasks:
 
   list-apps:
     desc: List all applications in the workspace
+    silent: true
     cmds:
-      - echo "📱 Applications in workspace:"
+      - echo "Applications in workspace:"
       - echo "============================"
       - |
         if [ -d "apps" ]; then
@@ -208,6 +216,7 @@ tasks:
 
   clean-workspace:
     desc: Clean all build artifacts and temporary files
+    silent: true
     cmds:
       - echo "🧹 Cleaning workspace"
       - echo "===================="
@@ -224,7 +233,7 @@ tasks:
         # Clean global artifacts
         rm -rf .task/
         rm -f *.log
-        echo "✅ Workspace cleanup complete"
+        echo "Workspace cleanup complete"
 
   # ===============================
   # Status and Information
@@ -232,16 +241,18 @@ tasks:
 
   status:
     desc: Show status of applications and deployments
+    silent: true
     vars:
       APP_NAME: '{{.APP_NAME}}'
       PROVIDER: '{{.PROVIDER}}'
     cmds:
-      - echo "📊 Application Status"
+      - echo "Application Status"
       - echo "===================="
       - task deploy:status APP_NAME={{.APP_NAME}} PROVIDER={{.PROVIDER}}
 
   logs:
     desc: Show application logs
+    silent: true
     vars:
       APP_NAME: '{{.APP_NAME}}'
       ENVIRONMENT: '{{.ENVIRONMENT}}'
@@ -257,6 +268,7 @@ tasks:
 
   run:
     desc: Run application locally
+    silent: true
     vars:
       APP_NAME: '{{.APP_NAME}}'
     cmds:
@@ -264,6 +276,7 @@ tasks:
 
   dev:
     desc: Start local development with hot reload
+    silent: true
     vars:
       APP_NAME: '{{.APP_NAME}}'
     cmds:
@@ -271,6 +284,7 @@ tasks:
 
   build:
     desc: Build application container
+    silent: true
     vars:
       APP_NAME: '{{.APP_NAME}}'
     cmds:
@@ -278,6 +292,7 @@ tasks:
 
   test:
     desc: Run application tests
+    silent: true
     vars:
       APP_NAME: '{{.APP_NAME}}'
     cmds:
@@ -285,6 +300,7 @@ tasks:
 
   deploy-dev:
     desc: Deploy to development environment
+    silent: true
     vars:
       APP_NAME: '{{.APP_NAME}}'
       PROVIDER: '{{.PROVIDER}}'
@@ -297,8 +313,9 @@ tasks:
 
   platform-status:
     desc: Check platform status (requires idp-builder)
+    silent: true
     cmds:
-      - echo "🏗️ Platform Status"
+      - echo "Platform Status"
       - echo "=================="
       - |
         if [ -f "../idp-builder/Taskfile.yaml" ]; then
@@ -311,6 +328,7 @@ tasks:
 
   platform-connect:
     desc: Connect to platform tools (ArgoCD, etc.)
+    silent: true
     vars:
       TOOL: '{{.TOOL | default "argocd"}}'
     cmds:
@@ -338,17 +356,19 @@ tasks:
 
   validate:
     desc: Validate application configuration and dependencies
+    silent: true
     vars:
       APP_NAME: '{{.APP_NAME}}'
     cmds:
-      - echo "🔍 Validating {{.APP_NAME}}"
+      - echo "Validating {{.APP_NAME}}"
       - echo "=========================="
       - task build:validate APP_NAME={{.APP_NAME}}
       - task deploy:validate APP_NAME={{.APP_NAME}}
-      - echo "✅ Validation complete"
+      - echo "Validation complete"
 
   doctor:
     desc: Run comprehensive health check of development environment
+    silent: true
     cmds:
       - echo "🏥 Development Environment Health Check"
       - echo "======================================"
@@ -357,14 +377,14 @@ tasks:
         
         # Check Docker
         if command -v docker >/dev/null 2>&1 && docker ps >/dev/null 2>&1; then
-          echo "✅ Docker is running"
+          echo "Docker is running"
         else
           echo "❌ Docker is not available"
         fi
         
         # Check kubectl
         if command -v kubectl >/dev/null 2>&1; then
-          echo "✅ kubectl is available"
+          echo "kubectl is available"
           if kubectl cluster-info >/dev/null 2>&1; then
             echo "  └─ Connected to cluster"
           else
@@ -376,21 +396,21 @@ tasks:
         
         # Check Go
         if command -v go >/dev/null 2>&1; then
-          echo "✅ Go is available ($(go version | cut -d' ' -f3))"
+          echo "Go is available ($(go version | cut -d' ' -f3))"
         else
           echo "⚠️ Go is not available"
         fi
         
         # Check Node.js
         if command -v node >/dev/null 2>&1; then
-          echo "✅ Node.js is available ($(node --version))"
+          echo "Node.js is available ($(node --version))"
         else
           echo "⚠️ Node.js is not available"
         fi
         
         # Check platform connection
         if [ -f "../idp-builder/Taskfile.yaml" ]; then
-          echo "✅ Platform tools accessible"
+          echo "Platform tools accessible"
         else
           echo "⚠️ Platform tools not found"
         fi
@@ -404,6 +424,7 @@ tasks:
 
   docs:
     desc: Open documentation and examples
+    silent: true
     cmds:
       - echo "📚 Documentation and Examples"
       - echo "============================"
@@ -429,13 +450,14 @@ tasks:
 
   examples:
     desc: Show common usage examples
+    silent: true
     cmds:
       - |
         cat << 'EOF'
-        💡 Common Usage Examples
+        Common Usage Examples
         =======================
         
-        🚀 Create and deploy a new Go API:
+        Create and deploy a new Go API:
           task scaffold:create-app APP_NAME=my-api TEMPLATE=go-api
           task quick-start APP_NAME=my-api
         
@@ -443,7 +465,7 @@ tasks:
           task local:dev APP_NAME=my-api
           # App will reload on code changes
         
-        🏗️ Build and deploy to staging:
+        Build and deploy to staging:
           task build:all APP_NAME=my-api
           task deploy:staging APP_NAME=my-api
         
@@ -451,16 +473,17 @@ tasks:
           task test:all APP_NAME=my-api
           task test:integration APP_NAME=my-api
         
-        🚀 Production deployment:
+        Production deployment:
           task prod-deploy APP_NAME=my-api IMAGE_TAG=v1.0.0
         
-        📊 Monitor deployment:
+        Monitor deployment:
           task status APP_NAME=my-api
           task logs APP_NAME=my-api ENVIRONMENT=prod
         EOF
 
   version:
     desc: Show IDP Usage version and configuration
+    silent: true
     cmds:
       - |
         echo "IDP Usage v1.0.0"
@@ -472,8 +495,9 @@ tasks:
 
   list-apps:
     desc: List available applications
+    silent: true
     cmds:
-      - echo "📱 Available applications in apps/ directory:"
+      - echo "Available applications in apps/ directory:"
       - |
         if [ -d "apps" ] && [ "$(ls -A apps 2>/dev/null)" ]; then
           ls -la apps/
@@ -483,8 +507,9 @@ tasks:
 
   list-templates:
     desc: List available templates  
+    silent: true
     cmds:
-      - echo "📋 Available templates in templates/ directory:"
+      - echo "Available templates in templates/ directory:"
       - |
         if [ -d "templates" ] && [ "$(ls -A templates 2>/dev/null)" ]; then
           ls -la templates/
@@ -503,26 +528,26 @@ tasks:
         │                    IDP Usage - Application Development & Usage                  │
         ╰─────────────────────────────────────────────────────────────────────────────────╯
         
-        🚀 APPLICATION MANAGEMENT:
+        APPLICATION MANAGEMENT:
           task help                    - Show this help
           task validate-structure      - Validate directory structure
           task version                 - Show version and configuration
           task list-apps               - List available applications
           task list-templates          - List available templates
           
-        🔍 QUICK VALIDATION:
+        QUICK VALIDATION:
           task validate-structure      - Ensure all required directories exist
           task list-apps               - Show available sample applications
           task list-templates          - Show available project templates
           
-        📋 CURRENT CONFIGURATION:
+        CURRENT CONFIGURATION:
           Application: {{.APP_NAME}}
           Environment: {{.ENVIRONMENT}}
           Registry: {{.REGISTRY}}
           Namespace: {{.NAMESPACE}}
           Domain: {{.DOMAIN}}
           
-        💡 USAGE EXAMPLES:
+        USAGE EXAMPLES:
           task help
           task validate-structure
           task list-apps
@@ -531,7 +556,7 @@ tasks:
         📚 DOCUMENTATION:
           See docs/ directory for detailed documentation
           
-        🔧 Phase 1 Status: Foundation and Directory Structure ✅
+        Phase 1 Status: Foundation and Directory Structure - COMPLETE
         
         Next phases will add:
         - Sample applications and source code

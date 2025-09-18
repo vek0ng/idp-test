@@ -9,13 +9,113 @@ vars:
   CLUSTER_NAME: '{{.CLUSTER_NAME | default "idp-cluster"}}'
   PROVIDER: '{{.PROVIDER | default "kind"}}'
   ENVIRONMENT: '{{.ENVIRONMENT | default "dev"}}'
-  NAMESPACE: '{{.NAMESPACE | default "crossplane-system"}}'
   
   # Crossplane specific configuration
   CROSSPLANE_VERSION: '{{.CROSSPLANE_VERSION | default "stable"}}'
   HELM_CHART_VERSION: '{{.HELM_CHART_VERSION | default "1.18.0"}}'
 
 tasks:
+
+  # ===============================
+  # Help and Information
+  # ===============================
+
+  help:
+    desc: Show Crossplane Infrastructure as Code platform help and available tasks
+    silent: true
+    cmds:
+      - |
+        cat << 'EOF'
+        Crossplane Infrastructure as Code Platform
+        =============================================
+        
+        Available Commands:
+        ------------------
+        install-crossplane     - Install and configure Crossplane Infrastructure as Code platform
+        uninstall-crossplane   - Uninstall Crossplane platform
+        status                 - Show Crossplane status and health
+        health-check           - Comprehensive Crossplane health check
+        
+        Provider Management:
+        -------------------
+        install-aws-provider   - Install AWS provider for Crossplane
+        install-gcp-provider   - Install GCP provider for Crossplane
+        install-azure-provider - Install Azure provider for Crossplane
+        create-provider-config - Create provider configuration for cloud authentication
+        list-providers         - List all installed Crossplane providers
+        
+        Resource Management:
+        -------------------
+        list-managed-resources - List all Crossplane managed resources
+        list-compositions      - List all Crossplane compositions
+        create-example-bucket  - Create example S3 bucket using Crossplane
+        create-example-database - Create example RDS database using Crossplane
+        
+        Usage Examples:
+        --------------
+        # Install Crossplane
+        task crossplane:install-crossplane CLUSTER_NAME=my-cluster PROVIDER=kind
+        task crossplane:install-crossplane CLUSTER_NAME=prod-cluster PROVIDER=aws
+        
+        # Setup cloud provider integration
+        task crossplane:install-aws-provider
+        task crossplane:create-provider-config PROVIDER=aws
+        
+        # Check status and health
+        task crossplane:status
+        task crossplane:health-check
+        task crossplane:list-providers
+        
+        # Resource management
+        task crossplane:list-managed-resources
+        task crossplane:list-compositions
+        
+        # Create example infrastructure
+        task crossplane:create-example-bucket BUCKET_NAME=my-crossplane-bucket
+        task crossplane:create-example-database DB_NAME=my-crossplane-db
+        
+        # Multi-cloud setup example
+        task crossplane:install-aws-provider
+        task crossplane:install-gcp-provider
+        task crossplane:create-provider-config PROVIDER=aws
+        task crossplane:create-provider-config PROVIDER=gcp
+        
+        Configuration Variables:
+        -----------------------
+        CLUSTER_NAME          - Target cluster name (default: idp-cluster)
+        PROVIDER              - Cloud provider: kind, aws, gcp, azure (default: kind)
+        CROSSPLANE_VERSION    - Crossplane version (default: stable)
+        HELM_CHART_VERSION    - Helm chart version (default: 1.18.0)
+        NAMESPACE             - Namespace for Crossplane (default: crossplane-system)
+        
+        Integration Notes:
+        -----------------
+        • Supports multiple cloud providers simultaneously
+        • Integrates with ArgoCD for GitOps workflows
+        • Works with Backstage for infrastructure visualization
+        • Provides declarative infrastructure management
+        • Supports custom resource definitions (CRDs)
+        
+        Common Workflows:
+        ----------------
+        # Complete infrastructure setup
+        task crossplane:install-crossplane
+        task crossplane:install-aws-provider
+        task crossplane:create-provider-config PROVIDER=aws
+        
+        # Infrastructure lifecycle
+        task crossplane:create-example-bucket BUCKET_NAME=prod-storage
+        task crossplane:list-managed-resources
+        
+        # Multi-cloud infrastructure
+        task crossplane:install-aws-provider
+        task crossplane:install-gcp-provider
+        task crossplane:list-providers
+        
+        # Monitor and maintain
+        task crossplane:health-check
+        task crossplane:status
+        EOF
 
   # ===============================
   # Crossplane Installation
@@ -26,25 +126,34 @@ tasks:
     vars:
       VERSION: '{{.CROSSPLANE_VERSION}}'
       NAMESPACE: '{{.NAMESPACE}}'
+      # CLUSTER_NAME: '{{.CLUSTER_NAME}}'
     cmds:
-      - echo "🚀 Installing Crossplane for {{.PROVIDER}} cluster {{.CLUSTER_NAME}}"
+      - echo "Installing Crossplane for {{.PROVIDER}} cluster {{.CLUSTER_NAME}}"
       - task: _validate-installation
       - task: _install-crossplane-core
+        vars:
+          VERSION: '{{.VERSION}}'
+          CHART_VERSION: '{{.HELM_CHART_VERSION}}'
+          NAMESPACE: '{{.NAMESPACE}}'
       - task: _verify-installation
+        vars:
+          NAMESPACE: '{{.NAMESPACE}}'
       - task: _install-provider-packages
-      - echo "✅ Crossplane installation complete"
+        vars:
+          PROVIDER: '{{.PROVIDER}}'
+      - echo "Crossplane installation complete"
 
   uninstall-crossplane:
     desc: Uninstall Crossplane platform
     vars:
       NAMESPACE: '{{.NAMESPACE}}'
     cmds:
-      - echo "🗑️ Uninstalling Crossplane from namespace {{.NAMESPACE}}"
+      - echo "Uninstalling Crossplane from namespace {{.NAMESPACE}}"
       - task: _confirm-uninstall
       - task: _cleanup-resources
       - helm uninstall crossplane -n {{.NAMESPACE}} || echo "Helm release not found"
       - kubectl delete namespace {{.NAMESPACE}} --ignore-not-found=true
-      - echo "✅ Crossplane uninstalled successfully"
+      - echo "Crossplane uninstalled successfully"
 
   # ===============================
   # Provider Management
@@ -55,7 +164,7 @@ tasks:
     vars:
       PROVIDER_VERSION: '{{.PROVIDER_VERSION | default "stable"}}'
     cmds:
-      - echo "☁️ Installing Crossplane AWS provider"
+      - echo "Installing Crossplane AWS provider"
       - |
         cat << EOF | kubectl apply -f -
         apiVersion: pkg.crossplane.io/v1
@@ -79,7 +188,7 @@ tasks:
         spec:
           package: xpkg.upbound.io/upbound/provider-aws-ec2:{{.PROVIDER_VERSION}}
         EOF
-      - echo "⏳ Waiting for AWS providers to be healthy"
+      - echo "Waiting for AWS providers to be healthy"
       - task: _wait-provider-ready
         vars:
           PROVIDER_NAME: "provider-aws-s3"
@@ -95,7 +204,7 @@ tasks:
     vars:
       PROVIDER_VERSION: '{{.PROVIDER_VERSION | default "stable"}}'
     cmds:
-      - echo "☁️ Installing Crossplane Azure provider"
+      - echo "Installing Crossplane Azure provider"
       - |
         cat << EOF | kubectl apply -f -
         apiVersion: pkg.crossplane.io/v1
@@ -112,7 +221,7 @@ tasks:
         spec:
           package: xpkg.upbound.io/upbound/provider-azure-sql:{{.PROVIDER_VERSION}}
         EOF
-      - echo "⏳ Waiting for Azure providers to be healthy"
+      - echo "Waiting for Azure providers to be healthy"
       - task: _wait-provider-ready
         vars:
           PROVIDER_NAME: "provider-azure-storage"
@@ -125,7 +234,7 @@ tasks:
     vars:
       PROVIDER_VERSION: '{{.PROVIDER_VERSION | default "stable"}}'
     cmds:
-      - echo "☁️ Installing Crossplane GCP provider"
+      - echo "Installing Crossplane GCP provider"
       - |
         cat << EOF | kubectl apply -f -
         apiVersion: pkg.crossplane.io/v1
@@ -142,7 +251,7 @@ tasks:
         spec:
           package: xpkg.upbound.io/upbound/provider-gcp-sql:{{.PROVIDER_VERSION}}
         EOF
-      - echo "⏳ Waiting for GCP providers to be healthy"
+      - echo "Waiting for GCP providers to be healthy"
       - task: _wait-provider-ready
         vars:
           PROVIDER_NAME: "provider-gcp-storage"
@@ -161,7 +270,7 @@ tasks:
       CONFIG_NAME: '{{.CONFIG_NAME | default "default"}}'
       SECRET_NAME: '{{.SECRET_NAME}}'
     cmds:
-      - echo "🔧 Creating {{.PROVIDER_TYPE}} provider configuration"
+      - echo "Creating {{.PROVIDER_TYPE}} provider configuration"
       - task: _create-{{.PROVIDER_TYPE}}-config
         vars:
           CONFIG_NAME: '{{.CONFIG_NAME}}'
@@ -170,14 +279,14 @@ tasks:
   list-providers:
     desc: List all installed Crossplane providers
     cmds:
-      - echo "📦 Installed Crossplane Providers"
+      - echo "Installed Crossplane Providers"
       - echo "=================================="
       - kubectl get providers -o custom-columns="NAME:.metadata.name,INSTALLED:.status.conditions[?(@.type==\"Installed\")].status,HEALTHY:.status.conditions[?(@.type==\"Healthy\")].status,PACKAGE:.spec.package"
 
   list-compositions:
     desc: List all Crossplane compositions
     cmds:
-      - echo "🏗️ Crossplane Compositions"
+      - echo "Crossplane Compositions"
       - echo "=========================="
       - kubectl get compositions -o custom-columns="NAME:.metadata.name,XRD:.spec.compositeTypeRef.apiVersion,KIND:.spec.compositeTypeRef.kind"
 
@@ -191,7 +300,7 @@ tasks:
       BUCKET_NAME: '{{.BUCKET_NAME | default "crossplane-example-bucket"}}'
       REGION: '{{.REGION | default "ap-southeast-1"}}'
     cmds:
-      - echo "🪣 Creating S3 bucket {{.BUCKET_NAME}} in {{.REGION}}"
+      - echo "Creating S3 bucket {{.BUCKET_NAME}} in {{.REGION}}"
       - |
         cat << EOF | kubectl apply -f -
         apiVersion: s3.aws.upbound.io/v1beta1
@@ -212,7 +321,7 @@ tasks:
       DB_CLASS: '{{.DB_CLASS | default "db.t3.micro"}}'
       REGION: '{{.REGION | default "ap-southeast-1"}}'
     cmds:
-      - echo "🗄️ Creating RDS database {{.DB_NAME}} in {{.REGION}}"
+      - echo "Creating RDS database {{.DB_NAME}} in {{.REGION}}"
       - |
         cat << EOF | kubectl apply -f -
         apiVersion: rds.aws.upbound.io/v1beta1
@@ -240,16 +349,16 @@ tasks:
     vars:
       RESOURCE_TYPE: '{{.RESOURCE_TYPE | default ""}}'
     cmds:
-      - echo "📋 Crossplane Managed Resources"
+      - echo "Crossplane Managed Resources"
       - echo "==============================="
       - |
         if [ -n "{{.RESOURCE_TYPE}}" ]; then
           kubectl get {{.RESOURCE_TYPE}} -o wide
         else
-          echo "🪣 S3 Buckets"
+          echo "S3 Buckets"
           kubectl get buckets -o custom-columns="NAME:.metadata.name,READY:.status.conditions[?(@.type==\"Ready\")].status,SYNCED:.status.conditions[?(@.type==\"Synced\")].status" 2>/dev/null || echo "No S3 buckets found"
           echo ""
-          echo "🗄️ RDS Instances"  
+          echo "RDS Instances"  
           kubectl get instances -o custom-columns="NAME:.metadata.name,READY:.status.conditions[?(@.type==\"Ready\")].status,SYNCED:.status.conditions[?(@.type==\"Synced\")].status" 2>/dev/null || echo "No RDS instances found"
         fi
 
@@ -262,19 +371,19 @@ tasks:
     vars:
       NAMESPACE: '{{.NAMESPACE}}'
     cmds:
-      - echo "📊 Crossplane Status in {{.NAMESPACE}}"
+      - echo "Crossplane Status in {{.NAMESPACE}}"
       - echo "====================================="
       - echo ""
-      - echo "🏃 Pods Status"
+      - echo "Pods Status"
       - kubectl get pods -n {{.NAMESPACE}} -o wide
       - echo ""
-      - echo "📦 Providers Status"
+      - echo "Providers Status"
       - task: list-providers
       - echo ""
-      - echo "🏗️ Compositions"
+      - echo "Compositions"
       - task: list-compositions
       - echo ""
-      - echo "📋 Managed Resources"
+      - echo "Managed Resources"
       - task: list-managed-resources
 
   health-check:
@@ -282,13 +391,13 @@ tasks:
     vars:
       NAMESPACE: '{{.NAMESPACE}}'
     cmds:
-      - echo "🏥 Crossplane Health Check"
+      - echo "Crossplane Health Check"
       - echo "=========================="
       - echo ""
       - |
         # Check namespace
         if kubectl get namespace {{.NAMESPACE}} >/dev/null 2>&1; then
-          echo "✅ Namespace {{.NAMESPACE}} exists"
+          echo "Namespace {{.NAMESPACE}} exists"
         else
           echo "❌ Namespace {{.NAMESPACE}} not found"
           exit 1
@@ -301,7 +410,7 @@ tasks:
             READY=$(kubectl get deployment $component -n {{.NAMESPACE}} -o jsonpath='{.status.readyReplicas}')
             DESIRED=$(kubectl get deployment $component -n {{.NAMESPACE}} -o jsonpath='{.spec.replicas}')
             if [ "$READY" = "$DESIRED" ]; then
-              echo "✅ $component ($READY/$DESIRED ready)"
+              echo "$component ($READY/$DESIRED ready)"
             else
               echo "❌ $component ($READY/$DESIRED ready)"
             fi
@@ -312,12 +421,12 @@ tasks:
         
         # Check providers
         echo ""
-        echo "📦 Provider Health"
+        echo "Provider Health"
         PROVIDERS=$(kubectl get providers -o jsonpath='{.items[*].metadata.name}')
         for provider in $PROVIDERS; do
           HEALTHY=$(kubectl get provider $provider -o jsonpath='{.status.conditions[?(@.type=="Healthy")].status}')
           if [ "$HEALTHY" = "True" ]; then
-            echo "✅ $provider"
+            echo "$provider"
           else
             echo "❌ $provider"
           fi
@@ -329,8 +438,9 @@ tasks:
 
   _validate-installation:
     internal: true
+    silent: true
     cmds:
-      - echo "🔍 Validating Crossplane installation prerequisites"
+      - echo "Validating Crossplane installation prerequisites"
       - |
         # Check if kubectl is available
         if ! command -v kubectl >/dev/null 2>&1; then
@@ -350,15 +460,17 @@ tasks:
           exit 1
         fi
         
-        echo "✅ Prerequisites validated"
+        echo "Prerequisites validated"
 
   _install-crossplane-core:
     internal: true
+    silent: true
     vars:
+      VERSION: '{{.VERSION}}'
+      CHART_VERSION: '{{.CHART_VERSION}}'
       NAMESPACE: '{{.NAMESPACE}}'
-      CHART_VERSION: '{{.HELM_CHART_VERSION}}'
     cmds:
-      - echo "⚙️ Installing Crossplane core components"
+      - echo "Installing Crossplane core components"
       - |
         # Add Crossplane Helm repository
         helm repo add crossplane-stable https://charts.crossplane.io/stable
@@ -376,8 +488,9 @@ tasks:
 
   _install-provider-packages:
     internal: true
+    silent: true
     cmds:
-      - echo "📦 Installing provider packages based on cluster provider {{.PROVIDER}}"
+      - echo "Installing provider packages based on cluster provider {{.PROVIDER}}"
       - |
         case "{{.PROVIDER}}" in
           "aws")
@@ -393,7 +506,7 @@ tasks:
             task: install-gcp-provider
             ;;
           "kind")
-            echo "⏭️ Skipping cloud provider installation for local kind cluster"
+            echo "Skipping cloud provider installation for local kind cluster"
             ;;
           *)
             echo "⚠️ Unknown provider {{.PROVIDER}}, skipping provider package installation"
@@ -402,18 +515,20 @@ tasks:
 
   _wait-provider-ready:
     internal: true
+    silent: true
     vars:
       PROVIDER_NAME: '{{.PROVIDER_NAME}}'
       TIMEOUT: '{{.TIMEOUT | default "300"}}'
     cmds:
       - |
-        echo "⏳ Waiting for provider {{.PROVIDER_NAME}} to be ready"
+        echo "Waiting for provider {{.PROVIDER_NAME}} to be ready"
         kubectl wait --for=condition=Healthy --timeout={{.TIMEOUT}}s provider/{{.PROVIDER_NAME}}
         kubectl wait --for=condition=Installed --timeout={{.TIMEOUT}}s provider/{{.PROVIDER_NAME}}
-        echo "✅ Provider {{.PROVIDER_NAME}} is ready"
+        echo "Provider {{.PROVIDER_NAME}} is ready"
 
   _create-aws-config:
     internal: true
+    silent: true
     vars:
       CONFIG_NAME: '{{.CONFIG_NAME}}'
       SECRET_NAME: '{{.SECRET_NAME}}'
@@ -435,6 +550,7 @@ tasks:
 
   _create-azure-config:
     internal: true
+    silent: true
     vars:
       CONFIG_NAME: '{{.CONFIG_NAME}}'
       SECRET_NAME: '{{.SECRET_NAME}}'
@@ -456,6 +572,7 @@ tasks:
 
   _create-gcp-config:
     internal: true
+    silent: true
     vars:
       CONFIG_NAME: '{{.CONFIG_NAME}}'
       SECRET_NAME: '{{.SECRET_NAME}}'
@@ -478,19 +595,21 @@ tasks:
 
   _verify-installation:
     internal: true
+    silent: true
     vars:
       NAMESPACE: '{{.NAMESPACE}}'
     cmds:
-      - echo "✅ Verifying Crossplane installation"
+      - echo "Verifying Crossplane installation"
       - |
         # Wait for all components to be ready
         kubectl wait --for=condition=ready pod -l app=crossplane -n {{.NAMESPACE}} --timeout=300s
-        echo "✅ All Crossplane components are ready"
+        echo "All Crossplane components are ready"
 
   _cleanup-resources:
     internal: true
+    silent: true
     cmds:
-      - echo "🧹 Cleaning up Crossplane managed resources"
+      - echo "Cleaning up Crossplane managed resources"
       - |
         # Delete all managed resources
         kubectl delete buckets --all --timeout=60s || echo "No S3 buckets to delete"
@@ -504,6 +623,7 @@ tasks:
 
   _confirm-uninstall:
     internal: true
+    silent: true
     vars:
       NAMESPACE: '{{.NAMESPACE}}'
     cmds:

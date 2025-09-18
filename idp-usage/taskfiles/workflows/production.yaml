@@ -70,7 +70,7 @@ tasks:
           APP_NAME: '{{.APP_NAME}}'
           NAMESPACE: '{{.NAMESPACE}}'
       - echo ""
-      - echo "✅ Production deployment completed successfully!"
+      - echo "Production deployment completed successfully!"
       - task: show-production-status
         vars:
           APP_NAME: '{{.APP_NAME}}'
@@ -82,7 +82,7 @@ tasks:
       APP_NAME: '{{.APP_NAME}}'
       IMAGE_TAG: '{{.IMAGE_TAG}}'
     cmds:
-      - echo "🔍 Production Readiness Validation"
+      - echo "Production Readiness Validation"
       - echo "=================================="
       - |
         # Check if application directory exists
@@ -90,14 +90,14 @@ tasks:
           echo "❌ Application directory not found - apps/{{.APP_NAME}}"
           exit 1
         fi
-        echo "✅ Application directory exists"
+        echo "Application directory exists"
       - |
         # Check if Kubernetes manifests exist
         if [ ! -d "apps/{{.APP_NAME}}/k8s" ]; then
           echo "❌ Kubernetes manifests not found - apps/{{.APP_NAME}}/k8s"
           exit 1
         fi
-        echo "✅ Kubernetes manifests exist"
+        echo "Kubernetes manifests exist"
       - |
         # Check if container image exists
         if ! docker image inspect "{{.APP_NAME}}:{{.IMAGE_TAG}}" >/dev/null 2>&1; then
@@ -105,7 +105,7 @@ tasks:
           echo "Building image for production..."
           task build:build APP_NAME={{.APP_NAME}} IMAGE_TAG={{.IMAGE_TAG}}
         fi
-        echo "✅ Container image available"
+        echo "Container image available"
       - |
         # Validate Kubernetes manifests
         echo "Validating Kubernetes manifests..."
@@ -113,15 +113,15 @@ tasks:
           echo "❌ Kubernetes manifest validation failed"
           exit 1
         }
-        echo "✅ Kubernetes manifests valid"
+        echo "Kubernetes manifests valid"
       - |
         # Check for production-specific configurations
         if [ -f "apps/{{.APP_NAME}}/k8s/production.yaml" ]; then
-          echo "✅ Production-specific configuration found"
+          echo "Production-specific configuration found"
         else
           echo "⚠️ No production-specific configuration found"
         fi
-      - echo "✅ Production readiness validation passed"
+      - echo "Production readiness validation passed"
 
   security-compliance-check:
     desc: Perform security and compliance checks for production
@@ -135,11 +135,11 @@ tasks:
         # Run container security scan
         echo "Running container security scan..."
         task test:security-test APP_NAME={{.APP_NAME}} || echo "⚠️ Security scan completed with findings"
-        echo "✅ Container security scan completed"
+        echo "Container security scan completed"
       - |
         # Validate resource limits are set
         if grep -q "resources:" apps/{{.APP_NAME}}/k8s/*.yaml; then
-          echo "✅ Resource limits configured"
+          echo "Resource limits configured"
         else
           echo "❌ Resource limits not configured for production"
           echo "Adding default production resource limits..."
@@ -164,23 +164,23 @@ tasks:
                     memory: "512Mi"
                     cpu: "500m"
         EOF
-          echo "✅ Added production resource limits"
+          echo "Added production resource limits"
         fi
       - |
         # Check for security context
         if grep -q "securityContext:" apps/{{.APP_NAME}}/k8s/*.yaml; then
-          echo "✅ Security context configured"
+          echo "Security context configured"
         else
           echo "⚠️ Security context not configured"
         fi
       - |
         # Validate network policies exist for production
         if [ -f "apps/{{.APP_NAME}}/k8s/network-policy.yaml" ]; then
-          echo "✅ Network policies configured"
+          echo "Network policies configured"
         else
           echo "⚠️ Network policies not configured for production"
         fi
-      - echo "✅ Security and compliance check completed"
+      - echo "Security and compliance check completed"
 
   setup-production-environment:
     desc: Setup production environment with proper isolation and policies
@@ -188,7 +188,7 @@ tasks:
       APP_NAME: '{{.APP_NAME}}'
       NAMESPACE: '{{.NAMESPACE}}'
     cmds:
-      - echo "🏗️ Setting up production environment"
+      - echo "Setting up production environment"
       - echo "==================================="
       - |
         # Create production namespace with labels
@@ -198,7 +198,7 @@ tasks:
           app={{.APP_NAME}} \
           security.kubernetes.io/level=restricted \
           --overwrite
-        echo "✅ Created production namespace - {{.NAMESPACE}}"
+        echo "Created production namespace - {{.NAMESPACE}}"
       - |
         # Create production resource quota
         cat <<EOF | kubectl apply -f -
@@ -218,7 +218,7 @@ tasks:
             secrets: "50"
             configmaps: "50"
         EOF
-        echo "✅ Applied production resource quota"
+        echo "Applied production resource quota"
       - |
         # Create production network policies
         cat <<EOF | kubectl apply -f -
@@ -254,7 +254,7 @@ tasks:
                 matchLabels:
                   environment: production
         EOF
-        echo "✅ Applied production network policies"
+        echo "Applied production network policies"
       - |
         # Create production pod security policy
         cat <<EOF | kubectl apply -f -
@@ -281,7 +281,7 @@ tasks:
           fsGroup:
             rule: 'RunAsAny'
         EOF
-        echo "✅ Applied production pod security policy"
+        echo "Applied production pod security policy"
 
   blue-green-deployment:
     desc: Deploy using blue-green deployment strategy
@@ -290,7 +290,7 @@ tasks:
       IMAGE_TAG: '{{.IMAGE_TAG}}'
       NAMESPACE: '{{.NAMESPACE}}'
     cmds:
-      - echo "🔄 Blue-Green Deployment"
+      - echo "Blue-Green Deployment"
       - echo "======================="
       - |
         # Create green deployment (new version)
@@ -307,12 +307,12 @@ tasks:
         
         # Deploy green version
         kubectl apply -f "/tmp/{{.APP_NAME}}-green/deployment.yaml" -n {{.NAMESPACE}}
-        echo "✅ Green deployment created"
+        echo "Green deployment created"
       - |
         # Wait for green deployment to be ready
         echo "Waiting for green deployment to be ready..."
         kubectl wait --for=condition=available deployment/{{.APP_NAME}}-green -n {{.NAMESPACE}} --timeout=300s
-        echo "✅ Green deployment is ready"
+        echo "Green deployment is ready"
       - |
         # Perform health checks on green deployment
         echo "Performing health checks on green deployment..."
@@ -326,14 +326,14 @@ tasks:
           echo "❌ Green deployment health check failed"
           exit 1
         }
-        echo "✅ Green deployment health checks passed"
+        echo "Green deployment health checks passed"
       - |
         # Switch traffic to green deployment
         echo "Switching traffic to green deployment..."
         
         # Update service selector to point to green deployment
         kubectl patch service {{.APP_NAME}} -n {{.NAMESPACE}} -p '{"spec":{"selector":{"app":"{{.APP_NAME}}-green"}}}'
-        echo "✅ Traffic switched to green deployment"
+        echo "Traffic switched to green deployment"
       - |
         # Clean up blue deployment after successful switch
         echo "Cleaning up blue deployment..."
@@ -344,7 +344,7 @@ tasks:
         kubectl patch deployment {{.APP_NAME}}-green -n {{.NAMESPACE}} --type='merge' -p='{"metadata":{"name":"{{.APP_NAME}}"}}'
         kubectl patch service {{.APP_NAME}} -n {{.NAMESPACE}} -p '{"spec":{"selector":{"app":"{{.APP_NAME}}"}}}'
         
-        echo "✅ Blue-green deployment completed"
+        echo "Blue-green deployment completed"
 
   post-deployment-validation:
     desc: Validate deployment after production deployment
@@ -352,7 +352,7 @@ tasks:
       APP_NAME: '{{.APP_NAME}}'
       NAMESPACE: '{{.NAMESPACE}}'
     cmds:
-      - echo "✅ Post-deployment Validation"
+      - echo "Post-deployment Validation"
       - echo "============================="
       - |
         # Check deployment status
@@ -375,21 +375,21 @@ tasks:
         # Run integration tests
         echo "Running integration tests..."
         task test:integration-test APP_NAME={{.APP_NAME}} NAMESPACE={{.NAMESPACE}} || echo "⚠️ Integration tests completed with warnings"
-        echo "✅ Integration tests completed"
+        echo "Integration tests completed"
       - |
         # Check resource usage
         echo "Checking resource usage..."
         kubectl top pods -n {{.NAMESPACE}} -l app={{.APP_NAME}} 2>/dev/null || echo "Metrics server not available"
-        echo "✅ Resource usage checked"
+        echo "Resource usage checked"
       - |
         # Verify external connectivity
         echo "Verifying external connectivity..."
         if kubectl get ingress {{.APP_NAME}} -n {{.NAMESPACE}} >/dev/null 2>&1; then
-          echo "✅ Ingress configured"
+          echo "Ingress configured"
         else
           echo "⚠️ No ingress found - external access may be limited"
         fi
-      - echo "✅ Post-deployment validation completed"
+      - echo "Post-deployment validation completed"
 
   setup-production-monitoring:
     desc: Setup comprehensive production monitoring
@@ -397,7 +397,7 @@ tasks:
       APP_NAME: '{{.APP_NAME}}'
       NAMESPACE: '{{.NAMESPACE}}'
     cmds:
-      - echo "📊 Setting up production monitoring"
+      - echo "Setting up production monitoring"
       - echo "=================================="
       - |
         # Create service monitor for Prometheus
@@ -420,7 +420,7 @@ tasks:
               path: /metrics
               interval: 30s
           EOF
-          echo "✅ Service monitor created"
+          echo "Service monitor created"
         else
           echo "⚠️ Prometheus operator not available"
         fi
@@ -462,7 +462,7 @@ tasks:
                 annotations:
                   summary: "High memory usage for {{.APP_NAME}}"
           EOF
-          echo "✅ Alerting rules created"
+          echo "Alerting rules created"
         else
           echo "⚠️ Prometheus operator not available for alerting"
         fi
@@ -473,7 +473,7 @@ tasks:
           --min=3 \
           --max=20 \
           -n {{.NAMESPACE}}
-        echo "✅ Horizontal Pod Autoscaler configured"
+        echo "Horizontal Pod Autoscaler configured"
       - |
         # Create production dashboard ConfigMap (for Grafana)
         cat <<EOF | kubectl apply -f -
@@ -509,8 +509,8 @@ tasks:
               }
             }
         EOF
-        echo "✅ Production dashboard created"
-      - echo "✅ Production monitoring setup completed"
+        echo "Production dashboard created"
+      - echo "Production monitoring setup completed"
 
   production-rollback:
     desc: Rollback production deployment to previous version
@@ -530,17 +530,17 @@ tasks:
         # Perform rollback
         echo "Rolling back deployment..."
         kubectl rollout undo deployment/{{.APP_NAME}} -n {{.NAMESPACE}}
-        echo "✅ Rollback initiated"
+        echo "Rollback initiated"
       - |
         # Wait for rollback to complete
         echo "Waiting for rollback to complete..."
         kubectl rollout status deployment/{{.APP_NAME}} -n {{.NAMESPACE}} --timeout=300s
-        echo "✅ Rollback completed"
+        echo "Rollback completed"
       - |
         # Verify rollback
         echo "Verifying rollback..."
         kubectl get pods -n {{.NAMESPACE}} -l app={{.APP_NAME}}
-        echo "✅ Rollback verified"
+        echo "Rollback verified"
 
   show-production-status:
     desc: Show comprehensive production status
@@ -573,7 +573,7 @@ tasks:
         echo ""
         echo "MONITORING ENDPOINTS:"
         if kubectl get servicemonitor {{.APP_NAME}}-monitor -n {{.NAMESPACE}} >/dev/null 2>&1; then
-          echo "✅ Prometheus monitoring configured"
+          echo "Prometheus monitoring configured"
         else
           echo "⚠️ Prometheus monitoring not configured"
         fi

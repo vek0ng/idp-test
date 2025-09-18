@@ -21,7 +21,7 @@ tasks:
     preconditions:
       - test -n "{{.APP_NAME}}" # Require application name
     cmds:
-      - echo "🚀 CI/CD Pipeline Setup"
+      - echo "CI/CD Pipeline Setup"
       - echo "======================="
       - echo "Application - {{.APP_NAME}}"
       - echo "Pipeline Type - {{.PIPELINE_TYPE}}"
@@ -54,7 +54,7 @@ tasks:
         vars:
           APP_NAME: '{{.APP_NAME}}'
       - echo ""
-      - echo "✅ CI/CD pipeline setup completed!"
+      - echo "CI/CD pipeline setup completed!"
       - task: show-pipeline-status
         vars:
           APP_NAME: '{{.APP_NAME}}'
@@ -332,7 +332,7 @@ tasks:
                 export IMAGE_TAG=${{ github.event.release.tag_name }}
                 task workflows:production-deploy APP_NAME={{.APP_NAME}} CLUSTER_NAME=prod IMAGE_TAG=$IMAGE_TAG
         EOF
-        echo "✅ Generated GitHub Actions workflow"
+        echo "Generated GitHub Actions workflow"
 
   generate-gitlab-ci:
     desc: Generate GitLab CI configuration
@@ -471,7 +471,7 @@ tasks:
           only:
             - tags
         EOF
-        echo "✅ Generated GitLab CI configuration"
+        echo "Generated GitLab CI configuration"
 
   setup-registry-integration:
     desc: Setup container registry integration
@@ -479,7 +479,7 @@ tasks:
       APP_NAME: '{{.APP_NAME}}'
       REGISTRY: '{{.REGISTRY}}'
     cmds:
-      - echo "🐳 Setting up Container Registry Integration"
+      - echo "Setting up Container Registry Integration"
       - echo "==========================================="
       - |
         # Create registry configuration
@@ -498,7 +498,7 @@ tasks:
           }
         }
         EOF
-        echo "✅ Registry configuration created"
+        echo "Registry configuration created"
       - |
         # Create registry secrets for Kubernetes
         cat > "apps/{{.APP_NAME}}/k8s/registry-secret.yaml" << EOF
@@ -511,7 +511,7 @@ tasks:
         data:
           .dockerconfigjson: # Base64 encoded .docker/config.json
         EOF
-        echo "✅ Registry secret template created"
+        echo "Registry secret template created"
       - |
         # Create image pull policy configuration
         cat > "apps/{{.APP_NAME}}/k8s/image-policy.yaml" << EOF
@@ -540,14 +540,14 @@ tasks:
               }
             }
         EOF
-        echo "✅ Image policy configuration created"
+        echo "Image policy configuration created"
 
   setup-quality-gates:
     desc: Setup code quality gates and checks
     vars:
       APP_NAME: '{{.APP_NAME}}'
     cmds:
-      - echo "🎯 Setting up Quality Gates"
+      - echo "Setting up Quality Gates"
       - echo "============================"
       - |
         # Create SonarQube configuration
@@ -572,7 +572,7 @@ tasks:
         # Quality gates
         sonar.qualitygate.wait=true
         EOF
-        echo "✅ SonarQube configuration created"
+        echo "SonarQube configuration created"
       - |
         # Create ESLint configuration
         cat > "apps/{{.APP_NAME}}/.eslintrc.js" << 'EOF'
@@ -605,7 +605,7 @@ tasks:
           }
         };
         EOF
-        echo "✅ ESLint configuration created"
+        echo "ESLint configuration created"
       - |
         # Create Prettier configuration
         cat > "apps/{{.APP_NAME}}/.prettierrc.json" << EOF
@@ -618,14 +618,14 @@ tasks:
           "arrowParens": "avoid"
         }
         EOF
-        echo "✅ Prettier configuration created"
+        echo "Prettier configuration created"
       - |
         # Create quality gate script
         cat > "apps/{{.APP_NAME}}/scripts/quality-gate.sh" << 'EOF'
         #!/bin/bash
         set -e
         
-        echo "🎯 Running Quality Gates"
+        echo "Running Quality Gates"
         echo "========================"
         
         # Test coverage threshold
@@ -649,17 +649,17 @@ tasks:
         # Run security audit
         npm audit --audit-level moderate
         
-        echo "✅ All quality gates passed!"
+        echo "All quality gates passed!"
         EOF
         chmod +x "apps/{{.APP_NAME}}/scripts/quality-gate.sh"
-        echo "✅ Quality gate script created"
+        echo "Quality gate script created"
 
   setup-deployment-automation:
     desc: Setup automated deployment workflows
     vars:
       APP_NAME: '{{.APP_NAME}}'
     cmds:
-      - echo "🚀 Setting up Deployment Automation"
+      - echo "Setting up Deployment Automation"
       - echo "=================================="
       - |
         # Create deployment script
@@ -671,7 +671,7 @@ tasks:
         ENVIRONMENT="${2:-development}"
         IMAGE_TAG="${3:-latest}"
         
-        echo "🚀 Automated Deployment"
+        echo "Automated Deployment"
         echo "======================="
         echo "Application: $APP_NAME"
         echo "Environment: $ENVIRONMENT"
@@ -706,10 +706,10 @@ tasks:
         sleep 30  # Wait for deployment to stabilize
         task test:integration-test APP_NAME=$APP_NAME ENVIRONMENT=$ENVIRONMENT
         
-        echo "✅ Deployment completed successfully!"
+        echo "Deployment completed successfully!"
         EOF
         chmod +x "apps/{{.APP_NAME}}/scripts/deploy.sh"
-        echo "✅ Deployment script created"
+        echo "Deployment script created"
       - |
         # Create rollback script
         cat > "apps/{{.APP_NAME}}/scripts/rollback.sh" << 'EOF'
@@ -741,17 +741,17 @@ tasks:
         echo "Verifying rollback..."
         task test:smoke-test APP_NAME=$APP_NAME ENVIRONMENT=$ENVIRONMENT
         
-        echo "✅ Rollback completed successfully!"
+        echo "Rollback completed successfully!"
         EOF
         chmod +x "apps/{{.APP_NAME}}/scripts/rollback.sh"
-        echo "✅ Rollback script created"
+        echo "Rollback script created"
 
   setup-monitoring-integration:
     desc: Setup monitoring and observability integration
     vars:
       APP_NAME: '{{.APP_NAME}}'
     cmds:
-      - echo "📊 Setting up Monitoring Integration"
+      - echo "Setting up Monitoring Integration"
       - echo "=================================="
       - |
         # Create monitoring configuration
@@ -779,7 +779,7 @@ tasks:
             metrics_path: '/metrics'
             scrape_interval: 30s
         EOF
-        echo "✅ Prometheus configuration created"
+        echo "Prometheus configuration created"
       - |
         # Create alert rules
         cat > "apps/{{.APP_NAME}}/monitoring/alert-rules.yml" << EOF
@@ -822,7 +822,7 @@ tasks:
               summary: "High memory usage for {{.APP_NAME}}"
               description: "{{.APP_NAME}} memory usage is above 80% of limit for 5 minutes."
         EOF
-        echo "✅ Alert rules created"
+        echo "Alert rules created"
       - |
         # Create Grafana dashboard
         cat > "apps/{{.APP_NAME}}/monitoring/grafana-dashboard.json" << 'EOF'
@@ -970,7 +970,7 @@ tasks:
           }
         }
         EOF
-        echo "✅ Grafana dashboard created"
+        echo "Grafana dashboard created"
 
   show-pipeline-status:
     desc: Show CI/CD pipeline status and configuration
@@ -981,7 +981,7 @@ tasks:
       - |
         cat << 'EOF'
         
-        🚀 CI/CD Pipeline Configuration
+        CI/CD Pipeline Configuration
         ===============================
         
         APPLICATION: {{.APP_NAME}}
@@ -991,22 +991,22 @@ tasks:
         EOF
       - |
         if [ -f "apps/{{.APP_NAME}}/.github/workflows/ci-cd.yaml" ]; then
-          echo "✅ GitHub Actions workflow - apps/{{.APP_NAME}}/.github/workflows/ci-cd.yaml"
+          echo "GitHub Actions workflow - apps/{{.APP_NAME}}/.github/workflows/ci-cd.yaml"
         fi
         if [ -f "apps/{{.APP_NAME}}/.gitlab-ci.yml" ]; then
-          echo "✅ GitLab CI configuration - apps/{{.APP_NAME}}/.gitlab-ci.yml"
+          echo "GitLab CI configuration - apps/{{.APP_NAME}}/.gitlab-ci.yml"
         fi
         if [ -f "apps/{{.APP_NAME}}/sonar-project.properties" ]; then
-          echo "✅ SonarQube configuration - apps/{{.APP_NAME}}/sonar-project.properties"
+          echo "SonarQube configuration - apps/{{.APP_NAME}}/sonar-project.properties"
         fi
         if [ -f "apps/{{.APP_NAME}}/.eslintrc.js" ]; then
-          echo "✅ ESLint configuration - apps/{{.APP_NAME}}/.eslintrc.js"
+          echo "ESLint configuration - apps/{{.APP_NAME}}/.eslintrc.js"
         fi
         if [ -f "apps/{{.APP_NAME}}/scripts/deploy.sh" ]; then
-          echo "✅ Deployment script - apps/{{.APP_NAME}}/scripts/deploy.sh"
+          echo "Deployment script - apps/{{.APP_NAME}}/scripts/deploy.sh"
         fi
         if [ -f "apps/{{.APP_NAME}}/monitoring/prometheus.yml" ]; then
-          echo "✅ Monitoring configuration - apps/{{.APP_NAME}}/monitoring/"
+          echo "Monitoring configuration - apps/{{.APP_NAME}}/monitoring/"
         fi
       - |
         echo ""
@@ -1028,14 +1028,14 @@ tasks:
         echo "• Configure kubectl access for deployments"
         echo "• Setup monitoring and alerting endpoints"
         echo ""
-        echo "✅ CI/CD pipeline ready for {{.APP_NAME}}!"
+        echo "CI/CD pipeline ready for {{.APP_NAME}}!"
 
   help:
     desc: Show CI/CD integration help and examples
     cmds:
       - |
         cat << 'EOF'
-        🚀 IDP Usage - CI/CD Integration Workflows
+        IDP Usage - CI/CD Integration Workflows
         ==========================================
         
         SETUP CI/CD PIPELINE:

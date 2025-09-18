@@ -27,7 +27,7 @@ tasks:
       LOCAL_PORT: '{{.LOCAL_PORT}}'
       DEBUG: '{{.DEBUG}}'
     cmds:
-      - echo "🚀 Starting {{.APP_NAME}} locally on port {{.LOCAL_PORT}}"
+      - echo "Starting {{.APP_NAME}} locally on port {{.LOCAL_PORT}}"
       - task: _validate-local-requirements
         vars:
           APP_NAME: '{{.APP_NAME}}'
@@ -56,11 +56,11 @@ tasks:
   setup:
     desc: Setup local development environment
     cmds:
-      - echo "🔧 Setting up local development environment"
+      - echo "Setting up local development environment"
       - task: _setup-local-registry
       - task: _setup-development-tools
       - task: _verify-local-setup
-      - echo "✅ Local development environment ready"
+      - echo "Local development environment ready"
 
   setup-database:
     desc: Setup local development database
@@ -68,7 +68,7 @@ tasks:
       DB_TYPE: '{{.DB_TYPE | default "postgres"}}'
       DB_PORT: '{{.DB_PORT | default "5432"}}'
     cmds:
-      - echo "🗄️ Setting up local {{.DB_TYPE}} database"
+      - echo "Setting up local {{.DB_TYPE}} database"
       - task: _setup-local-database
         vars:
           DB_TYPE: '{{.DB_TYPE}}'
@@ -81,22 +81,22 @@ tasks:
   start-services:
     desc: Start local development services (registry, database, etc.)
     cmds:
-      - echo "🔄 Starting local development services"
+      - echo "Starting local development services"
       - task: _start-local-registry
       - task: _start-local-database
-      - echo "✅ Development services started"
+      - echo "Development services started"
 
   stop-services:
     desc: Stop local development services
     cmds:
       - echo "🛑 Stopping local development services"
       - task: _stop-local-services
-      - echo "✅ Development services stopped"
+      - echo "Development services stopped"
 
   status-services:
     desc: Check status of local development services
     cmds:
-      - echo "📊 Local Development Services Status"
+      - echo "Local Development Services Status"
       - echo "==================================="
       - task: _check-service-status
 
@@ -122,7 +122,7 @@ tasks:
     vars:
       APP_NAME: '{{.APP_NAME}}'
     cmds:
-      - echo "🧪 Running tests locally for {{.APP_NAME}}"
+      - echo "Running tests locally for {{.APP_NAME}}"
       - |
         cd apps/{{.APP_NAME}}
         export DEBUG=true
@@ -158,7 +158,7 @@ tasks:
       APP_NAME: '{{.APP_NAME}}'
       PROFILE_PORT: '{{.PROFILE_PORT | default "6060"}}'
     cmds:
-      - echo "📊 Starting {{.APP_NAME}} with profiling"
+      - echo "Starting {{.APP_NAME}} with profiling"
       - task: _start-with-profiling
         vars:
           APP_NAME: '{{.APP_NAME}}'
@@ -174,7 +174,7 @@ tasks:
       APP_NAME: '{{.APP_NAME}}'
       LINES: '{{.LINES | default "100"}}'
     cmds:
-      - echo "📄 Local logs for {{.APP_NAME}}"
+      - echo "Local logs for {{.APP_NAME}}"
       - |
         if [ -f "apps/{{.APP_NAME}}/logs/app.log" ]; then
           tail -n {{.LINES}} apps/{{.APP_NAME}}/logs/app.log
@@ -187,7 +187,7 @@ tasks:
     vars:
       APP_NAME: '{{.APP_NAME}}'
     cmds:
-      - echo "🧹 Cleaning local development artifacts"
+      - echo "Cleaning local development artifacts"
       - |
         cd apps/{{.APP_NAME}} 2>/dev/null || exit 0
         
@@ -205,16 +205,16 @@ tasks:
           rm -rf node_modules/.cache/
         fi
         
-        echo "✅ Local cleanup complete"
+        echo "Local cleanup complete"
 
   reset:
     desc: Reset local development environment
     cmds:
-      - echo "🔄 Resetting local development environment"
+      - echo "Resetting local development environment"
       - task: stop-services
       - task: clean
       - task: setup
-      - echo "✅ Local environment reset complete"
+      - echo "Local environment reset complete"
 
   # ===============================
   # Internal Helper Tasks
@@ -237,7 +237,7 @@ tasks:
           echo "⚠️ Docker not installed - some services may not work"
         fi
         
-        echo "✅ Local requirements validated"
+        echo "Local requirements validated"
 
   _run-local-app:
     internal: true
@@ -302,54 +302,54 @@ tasks:
     internal: true
     cmds:
       - |
-        echo "🐳 Setting up local container registry"
+        echo "Setting up local container registry"
         if ! docker ps | grep -q "registry:2"; then
           docker run -d -p 5000:5000 --restart=always --name local-registry registry:2 2>/dev/null || echo "Registry already running"
         fi
-        echo "✅ Local registry ready at localhost:5000"
+        echo "Local registry ready at localhost:5000"
 
   _setup-development-tools:
     internal: true
     cmds:
       - |
-        echo "🛠️ Checking development tools"
+        echo "Checking development tools"
         
         # Check for Go tools
         if command -v go >/dev/null 2>&1; then
-          echo "✅ Go development environment"
+          echo "Go development environment"
           # Install useful Go tools if not present
           if ! command -v air >/dev/null 2>&1; then
-            echo "📦 Installing air for hot reload..."
+            echo "Installing air for hot reload..."
             go install github.com/cosmtrek/air@latest 2>/dev/null || echo "Failed to install air"
           fi
         fi
         
         # Check for Node.js tools
         if command -v npm >/dev/null 2>&1; then
-          echo "✅ Node.js development environment"
+          echo "Node.js development environment"
         fi
         
         # Check for Python tools
         if command -v python >/dev/null 2>&1; then
-          echo "✅ Python development environment"
+          echo "Python development environment"
         fi
 
   _verify-local-setup:
     internal: true
     cmds:
       - |
-        echo "🔍 Verifying local setup"
+        echo "Verifying local setup"
         
         # Check Docker
         if docker ps >/dev/null 2>&1; then
-          echo "✅ Docker is running"
+          echo "Docker is running"
         else
           echo "⚠️ Docker is not running"
         fi
         
         # Check local registry
         if curl -s http://localhost:5000/v2/ >/dev/null 2>&1; then
-          echo "✅ Local registry is accessible"
+          echo "Local registry is accessible"
         else
           echo "⚠️ Local registry is not accessible"
         fi
@@ -417,21 +417,21 @@ tasks:
       - |
         echo "Registry:"
         if docker ps | grep -q "local-registry"; then
-          echo "  ✅ Running on localhost:5000"
+          echo "  Running on localhost:5000"
         else
           echo "  ❌ Not running"
         fi
         
         echo "PostgreSQL:"
         if docker ps | grep -q "local-postgres"; then
-          echo "  ✅ Running on localhost:5432"
+          echo "  Running on localhost:5432"
         else
           echo "  ❌ Not running"
         fi
         
         echo "MySQL:"
         if docker ps | grep -q "local-mysql"; then
-          echo "  ✅ Running on localhost:3306"
+          echo "  Running on localhost:3306"
         else
           echo "  ❌ Not running"
         fi

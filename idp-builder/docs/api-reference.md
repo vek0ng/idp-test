@@ -510,6 +510,8 @@ task backstage:install-backstage
 - `CLUSTER_NAME`: Target cluster
 - `NAMESPACE`: Backstage namespace (default: `backstage`)
 
+> **⚠️ Production Warning**: This task installs a placeholder nginx service for initial setup. Replace with a custom Backstage Docker image before production use. See [Production Deployment](installation.md#production-deployment) guide.
+
 ---
 
 #### `backstage:configure-integrations`
